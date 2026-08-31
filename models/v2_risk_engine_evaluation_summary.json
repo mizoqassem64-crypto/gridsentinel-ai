@@ -1,0 +1,29 @@
+{
+  "model": "FailurePredictorV2",
+  "version": "2.0",
+  "dataset_records": 51000,
+  "actual_failures": 1697,
+  "risk_distribution": {
+    "LOW": 44692,
+    "MEDIUM": 3563,
+    "HIGH": 1164,
+    "CRITICAL": 1581
+  },
+  "missed_low_medium_risk": 20,
+  "average_risk_by_actual_failure": {
+    "0": {
+      "count": 49303.0,
+      "mean": 10.706094760967892,
+      "median": 7.2,
+      "min": 2.0,
+      "max": 89.38
+    },
+    "1": {
+      "count": 1697.0,
+      "mean": 76.62779611078373,
+      "median": 77.32,
+      "min": 17.42,
+      "max": 91.69
+    }
+  }
+}

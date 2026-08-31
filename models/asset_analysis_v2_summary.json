@@ -1,0 +1,72 @@
+{
+  "model": "FailurePredictorV2",
+  "version": "2.0",
+  "threshold": 0.7000000000000002,
+  "test_samples": 7650,
+  "test_failures": 275,
+  "overall_metrics": {
+    "accuracy": 0.9819607843137255,
+    "precision": 0.6751918158567775,
+    "recall": 0.96,
+    "f1": 0.7927927927927928
+  },
+  "confusion_matrix": {
+    "tn": 7248,
+    "fp": 127,
+    "fn": 11,
+    "tp": 264
+  },
+  "assets": [
+    {
+      "asset_id": "T01",
+      "records": 2550,
+      "actual_failures": 111,
+      "predicted_failures": 132,
+      "actual_failure_rate": 0.04352941176470588,
+      "predicted_failure_rate": 0.05176470588235294,
+      "TP": 102,
+      "TN": 2409,
+      "FP": 30,
+      "FN": 9,
+      "accuracy": 0.9847058823529412,
+      "precision": 0.7727272727272727,
+      "recall": 0.918918918918919,
+      "f1": 0.8395061728395061,
+      "avg_probability": 0.05801154673099518
+    },
+    {
+      "asset_id": "T02",
+      "records": 2550,
+      "actual_failures": 66,
+      "predicted_failures": 101,
+      "actual_failure_rate": 0.02588235294117647,
+      "predicted_failure_rate": 0.0396078431372549,
+      "TP": 65,
+      "TN": 2448,
+      "FP": 36,
+      "FN": 1,
+      "accuracy": 0.9854901960784314,
+      "precision": 0.6435643564356436,
+      "recall": 0.9848484848484849,
+      "f1": 0.7784431137724551,
+      "avg_probability": 0.04082228243350983
+    },
+    {
+      "asset_id": "T03",
+      "records": 2550,
+      "actual_failures": 98,
+      "predicted_failures": 158,
+      "actual_failure_rate": 0.038431372549019606,
+      "predicted_failure_rate": 0.06196078431372549,
+      "TP": 97,
+      "TN": 2391,
+      "FP": 61,
+      "FN": 1,
+      "accuracy": 0.9756862745098039,
+      "precision": 0.6139240506329114,
+      "recall": 0.9897959183673469,
+      "f1": 0.7578125,
+      "avg_probability": 0.0675138458609581
+    }
+  ]
+}

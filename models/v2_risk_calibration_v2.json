@@ -1,0 +1,211 @@
+{
+  "version": "2.2",
+  "status": "EXPERIMENTAL",
+  "records": 51000,
+  "weights": {
+    "ml": 0.6,
+    "operational": 0.4
+  },
+  "baseline_v21": {
+    "threshold": 70,
+    "tp": 1660,
+    "fp": 917,
+    "fn": 37,
+    "tn": 48386,
+    "precision": 0.6441598758246022,
+    "recall": 0.9781968179139658,
+    "specificity": 0.9814007261221427,
+    "f1": 0.7767898923724847
+  },
+  "recommended_threshold": {
+    "threshold": 70,
+    "tp": 1660,
+    "fp": 917,
+    "fn": 37,
+    "tn": 48386,
+    "precision": 0.6441598758246022,
+    "recall": 0.9781968179139658,
+    "specificity": 0.9814007261221427,
+    "f1": 0.7767898923724847
+  },
+  "risk_levels": [
+    {
+      "risk_level": "LOW",
+      "records": 46589,
+      "failures": 1,
+      "failure_rate": 2.1464294146686985e-05
+    },
+    {
+      "risk_level": "MEDIUM",
+      "records": 1517,
+      "failures": 15,
+      "failure_rate": 0.00988793671720501
+    },
+    {
+      "risk_level": "HIGH",
+      "records": 598,
+      "failures": 90,
+      "failure_rate": 0.1505016722408027
+    },
+    {
+      "risk_level": "CRITICAL",
+      "records": 2296,
+      "failures": 1591,
+      "failure_rate": 0.6929442508710801
+    }
+  ],
+  "escaped_failures": {
+    "count": 16,
+    "by_fault": {
+      "overheating": 5,
+      "voltage_instability": 4,
+      "overload": 4,
+      "harmonic_distortion": 3
+    },
+    "by_asset": {
+      "T01": 10,
+      "T03": 5,
+      "T02": 1
+    }
+  },
+  "critical_false_positives": 705,
+  "threshold_analysis": [
+    {
+      "threshold": 25,
+      "tp": 1696,
+      "fp": 2715,
+      "fn": 1,
+      "tn": 46588,
+      "precision": 0.3844933121741102,
+      "recall": 0.9994107248084856,
+      "specificity": 0.9449323570573799,
+      "f1": 0.5553372626064178
+    },
+    {
+      "threshold": 30,
+      "tp": 1694,
+      "fp": 1933,
+      "fn": 3,
+      "tn": 47370,
+      "precision": 0.4670526606010477,
+      "recall": 0.9982321744254566,
+      "specificity": 0.9607934608441677,
+      "f1": 0.6363636363636364
+    },
+    {
+      "threshold": 35,
+      "tp": 1691,
+      "fp": 1611,
+      "fn": 6,
+      "tn": 47692,
+      "precision": 0.512113870381587,
+      "recall": 0.9964643488509134,
+      "specificity": 0.9673245035799038,
+      "f1": 0.6765353070614123
+    },
+    {
+      "threshold": 40,
+      "tp": 1687,
+      "fp": 1416,
+      "fn": 10,
+      "tn": 47887,
+      "precision": 0.5436674186271351,
+      "recall": 0.9941072480848556,
+      "specificity": 0.9712796381558931,
+      "f1": 0.7029166666666667
+    },
+    {
+      "threshold": 45,
+      "tp": 1686,
+      "fp": 1308,
+      "fn": 11,
+      "tn": 47995,
+      "precision": 0.56312625250501,
+      "recall": 0.9935179728933412,
+      "specificity": 0.9734701742287487,
+      "f1": 0.7188232786186314
+    },
+    {
+      "threshold": 50,
+      "tp": 1681,
+      "fp": 1213,
+      "fn": 16,
+      "tn": 48090,
+      "precision": 0.5808569454042847,
+      "recall": 0.990571596935769,
+      "specificity": 0.975397034663205,
+      "f1": 0.7323023306469177
+    },
+    {
+      "threshold": 55,
+      "tp": 1678,
+      "fp": 1109,
+      "fn": 19,
+      "tn": 48194,
+      "precision": 0.602081090778615,
+      "recall": 0.9888037713612257,
+      "specificity": 0.9775064397703994,
+      "f1": 0.7484388938447813
+    },
+    {
+      "threshold": 60,
+      "tp": 1672,
+      "fp": 1032,
+      "fn": 25,
+      "tn": 48271,
+      "precision": 0.6183431952662722,
+      "recall": 0.985268120212139,
+      "specificity": 0.9790682108593798,
+      "f1": 0.7598273119745513
+    },
+    {
+      "threshold": 65,
+      "tp": 1665,
+      "fp": 957,
+      "fn": 32,
+      "tn": 48346,
+      "precision": 0.6350114416475973,
+      "recall": 0.981143193871538,
+      "specificity": 0.9805894164655294,
+      "f1": 0.7710118082889557
+    },
+    {
+      "threshold": 70,
+      "tp": 1660,
+      "fp": 917,
+      "fn": 37,
+      "tn": 48386,
+      "precision": 0.6441598758246022,
+      "recall": 0.9781968179139658,
+      "specificity": 0.9814007261221427,
+      "f1": 0.7767898923724847
+    },
+    {
+      "threshold": 75,
+      "tp": 1591,
+      "fp": 705,
+      "fn": 106,
+      "tn": 48598,
+      "precision": 0.6929442508710801,
+      "recall": 0.9375368296994696,
+      "specificity": 0.9857006673021925,
+      "f1": 0.7968945654896067
+    },
+    {
+      "threshold": 80,
+      "tp": 1357,
+      "fp": 494,
+      "fn": 340,
+      "tn": 48809,
+      "precision": 0.7331172339276067,
+      "recall": 0.7996464348850914,
+      "specificity": 0.9899803257408272,
+      "f1": 0.7649379932356257
+    }
+  ],
+  "calibration_policy": {
+    "ml_probability_unchanged": true,
+    "operational_component_adjusted": true,
+    "production_failure_floor": 70.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "model": "FailurePredictor",
+  "input_features": [
+    "rated_mva",
+    "asset_age_years",
+    "criticality",
+    "voltage_pu",
+    "current_a",
+    "frequency_hz",
+    "active_power_mw",
+    "reactive_power_mvar",
+    "power_factor",
+    "temperature_c",
+    "load_percent",
+    "thd_percent"
+  ],
+  "input_feature_count": 12,
+  "target": "failure",
+  "architecture": [
+    "Linear(12,64)",
+    "ReLU",
+    "Linear(64,32)",
+    "ReLU",
+    "Dropout(0.20)",
+    "Linear(32,16)",
+    "ReLU",
+    "Linear(16,1)"
+  ],
+  "seed": 42,
+  "epochs": 60,
+  "batch_size": 512,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "pos_weight": true
+}

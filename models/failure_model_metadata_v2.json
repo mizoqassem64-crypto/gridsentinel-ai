@@ -1,0 +1,52 @@
+{
+  "model": "FailurePredictorV2",
+  "version": "2.0",
+  "input_features": [
+    "rated_mva",
+    "asset_age_years",
+    "criticality",
+    "voltage_pu",
+    "current_a",
+    "frequency_hz",
+    "active_power_mw",
+    "reactive_power_mvar",
+    "power_factor",
+    "temperature_c",
+    "load_percent",
+    "thd_percent",
+    "voltage_deviation",
+    "frequency_deviation",
+    "temperature_excess",
+    "electrical_stress"
+  ],
+  "input_feature_count": 16,
+  "target": "failure",
+  "architecture": [
+    "Linear(16,64)",
+    "ReLU",
+    "Linear(64,32)",
+    "ReLU",
+    "Dropout(0.20)",
+    "Linear(32,16)",
+    "ReLU",
+    "Linear(16,1)"
+  ],
+  "seed": 42,
+  "epochs": 60,
+  "batch_size": 512,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "pos_weight": true,
+  "best_epoch": 33,
+  "best_validation_f1": 0.7283950617283951,
+  "test_metrics": {
+    "accuracy": 0.9773856209150327,
+    "precision": 0.6169724770642202,
+    "recall": 0.9781818181818182,
+    "f1": 0.7566807313642757,
+    "tn": 7208,
+    "fp": 167,
+    "fn": 6,
+    "tp": 269
+  }
+}
