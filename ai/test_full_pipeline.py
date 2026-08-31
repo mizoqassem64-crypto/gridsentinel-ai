@@ -94,7 +94,7 @@ def main():
         )
 
         check(
-            "Dataset contains actual_failure",
+            "Dataset contains failure",
             "failure" in df.columns,
         )
 
@@ -103,12 +103,12 @@ def main():
             "fault_type" in df.columns,
         )
 
-        if "actual_failure" in df.columns:
+        if "failure" in df.columns:
             failure_rate = df["failure"].mean()
 
             check(
                 "Failure labels are binary",
-                set(df["actual_failure"].dropna().unique())
+                set(df["failure"].dropna().unique())
                 <= {0, 1},
                 f"failure_rate={failure_rate:.4f}",
             )
