@@ -84,10 +84,11 @@ print(f"Failures: {int(test_df['failure'].sum()):,}")
 
 print("\nLoading V2 model...")
 
-checkpoint = torch.load(
+from ai.ml.artifact_guard import load_v2_weights
+
+state_dict = load_v2_weights(
     MODEL_PATH,
-    map_location="cpu",
-    weights_only=False
+    input_size=16,
 )
 
 model = torch.nn.Sequential(
@@ -101,25 +102,15 @@ model = torch.nn.Sequential(
     torch.nn.Linear(16, 1)
 )
 
-if isinstance(checkpoint, dict):
+# Handle models saved inside a wrapper
+if any(k.startswith("network.") for k in state_dict):
 
-    state_dict = checkpoint.get(
-        "state_dict",
-        checkpoint
-    )
+    state_dict = {
+        k.replace("network.", "", 1): v
+        for k, v in state_dict.items()
+    }
 
-    # Handle models saved inside a wrapper
-    if any(k.startswith("network.") for k in state_dict):
-
-        state_dict = {
-            k.replace("network.", "", 1): v
-            for k, v in state_dict.items()
-        }
-
-    model.load_state_dict(state_dict)
-
-else:
-    model = checkpoint
+model.load_state_dict(state_dict)
 
 model.eval()
 

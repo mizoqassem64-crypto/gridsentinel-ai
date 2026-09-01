@@ -1,5 +1,5 @@
 {
-  "threshold": 0.7000000000000002,
+  "threshold": 0.70,
   "selection_rule": "highest_precision_with_recall_at_least_0.95",
   "model": "FailurePredictorV2",
   "validation_metrics": {

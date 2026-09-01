@@ -120,54 +120,36 @@ class FailurePredictorV2(torch.nn.Module):
 
 print("\nLoading V2 model...")
 
-checkpoint = torch.load(
+from ai.ml.artifact_guard import load_v2_weights
+
+state_dict = load_v2_weights(
     MODEL_PATH,
-    map_location="cpu",
-    weights_only=False,
+    input_size=len(FEATURES),
 )
 
-if isinstance(checkpoint, torch.nn.Module):
+model = FailurePredictorV2(
+    len(FEATURES)
+)
 
-    model = checkpoint
+if any(
+    str(k).startswith("network.")
+    for k in state_dict.keys()
+):
+
+    model.load_state_dict(
+        state_dict
+    )
 
 else:
 
-    model = FailurePredictorV2(
-        len(FEATURES)
+    normalized = {
+        f"network.{k}": v
+        for k, v in state_dict.items()
+    }
+
+    model.load_state_dict(
+        normalized
     )
-
-    if (
-        isinstance(checkpoint, dict)
-        and "state_dict" in checkpoint
-    ):
-
-        state_dict = checkpoint["state_dict"]
-
-    else:
-
-        state_dict = checkpoint
-
-    keys = list(state_dict.keys())
-
-    if any(
-        str(k).startswith("network.")
-        for k in keys
-    ):
-
-        model.load_state_dict(
-            state_dict
-        )
-
-    else:
-
-        normalized = {
-            f"network.{k}": v
-            for k, v in state_dict.items()
-        }
-
-        model.load_state_dict(
-            normalized
-        )
 
 model.eval()
 

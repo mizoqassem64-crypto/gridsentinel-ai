@@ -2,28 +2,28 @@
   "model": "FailurePredictorV2",
   "version": "2.0",
   "dataset_records": 51000,
-  "actual_failures": 1697,
+  "actual_failures": 1838,
   "risk_distribution": {
-    "LOW": 44692,
-    "MEDIUM": 3563,
-    "HIGH": 1164,
-    "CRITICAL": 1581
+    "LOW": 45194,
+    "MEDIUM": 3797,
+    "HIGH": 437,
+    "CRITICAL": 1572
   },
-  "missed_low_medium_risk": 20,
+  "missed_low_medium_risk": 13,
   "average_risk_by_actual_failure": {
     "0": {
-      "count": 49303.0,
-      "mean": 10.706094760967892,
-      "median": 7.2,
+      "count": 49162.0,
+      "mean": 9.709023432732598,
+      "median": 6.8,
       "min": 2.0,
-      "max": 89.38
+      "max": 80.51
     },
     "1": {
-      "count": 1697.0,
-      "mean": 76.62779611078373,
-      "median": 77.32,
-      "min": 17.42,
-      "max": 91.69
+      "count": 1838.0,
+      "mean": 77.89008705114256,
+      "median": 78.0,
+      "min": 30.0,
+      "max": 92.4
     }
   }
 }

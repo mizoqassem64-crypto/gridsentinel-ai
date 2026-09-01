@@ -1,0 +1,16 @@
+{
+  "bundle": "v2",
+  "hashes": {
+    "metadata": "4e0a9f6a9782c6beb7404635be6edd6ca36913f33448798654e7cbcb6df1a21d",
+    "model": "441d2ace3471172a6288395ddb7cd8117331d8a63aeda8ad0c4bf0d66a93db9a",
+    "scaler": "7703da103ac39631634d253990680b6a0acf2d1e4423a65d002b66a4b8ac54fc",
+    "threshold": "3c6016670be2e80164e3a65bccca97817e14a32da8b59d1d6033f84ec2b0c843"
+  },
+  "manifest_version": "1",
+  "paths": {
+    "metadata": "failure_model_metadata_v2.json",
+    "model": "failure_predictor_v2.pt",
+    "scaler": "failure_scaler_v2.json",
+    "threshold": "failure_threshold_v2.json"
+  }
+}

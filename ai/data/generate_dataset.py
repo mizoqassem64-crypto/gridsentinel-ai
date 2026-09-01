@@ -110,9 +110,22 @@ def apply_fault(state, fault, severity):
     return state
 
 
-def classify_state(fault, severity):
+def _is_physical_failure(fault, state):
+    """Determine failure from physical feature thresholds."""
+    return (
+        (fault == "voltage_instability" and state["voltage"] <= 0.93)
+        or (fault == "overheating" and state["temperature"] >= 105)
+        or (fault == "overload" and state["load"] >= 90)
+        or (fault == "harmonic_distortion" and state["thd"] >= 13)
+    )
+
+
+def classify_state(fault, severity, state):
     if fault == "normal":
         return "healthy"
+
+    if _is_physical_failure(fault, state):
+        return "failure"
 
     if severity < 0.30:
         return "early_degradation"
@@ -120,10 +133,7 @@ def classify_state(fault, severity):
     if severity < 0.65:
         return "anomaly"
 
-    if severity < 0.90:
-        return "high_risk"
-
-    return "failure"
+    return "high_risk"
 
 
 def generate_record(transformer, timestamp):
@@ -141,16 +151,9 @@ def generate_record(transformer, timestamp):
 
     state = apply_fault(normal, fault, severity)
 
-    operating_state = classify_state(fault, severity)
+    operating_state = classify_state(fault, severity, state)
 
-    # Failure label is intentionally conservative.
-    failure = int(
-        operating_state == "failure"
-        or (
-            state["temperature"] >= 95
-            and state["load"] >= 90
-        )
-    )
+    failure = int(operating_state == "failure")
 
     if failure:
         failure_horizon = random.randint(1, 24)

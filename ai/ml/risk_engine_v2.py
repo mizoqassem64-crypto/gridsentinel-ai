@@ -5,6 +5,17 @@ import numpy as np
 import torch
 
 from ai.ml.safety_guard_v2 import apply_safety_guard
+from ai.ml.artifact_guard import (
+    ArtifactGuardError,
+    load_v2_weights,
+    verify_manifest,
+    validate_threshold_config,
+    validate_scaler,
+    validate_metadata,
+    validate_telemetry,
+    consistency_checks,
+    is_severe_physical,
+)
 
 
 # ============================================================
@@ -22,27 +33,50 @@ MODEL_PATH = ROOT / "models" / "failure_predictor_v2.pt"
 SCALER_PATH = ROOT / "models" / "failure_scaler_v2.json"
 METADATA_PATH = ROOT / "models" / "failure_model_metadata_v2.json"
 THRESHOLD_PATH = ROOT / "models" / "failure_threshold_v2.json"
+MANIFEST_PATH = ROOT / "models" / "v2_artifact_manifest.json"
+
+
+# ============================================================
+# Verify artifact integrity (fail closed)
+# ============================================================
+
+try:
+    verify_manifest(
+        manifest_path=MANIFEST_PATH,
+        model=MODEL_PATH,
+        scaler=SCALER_PATH,
+        metadata=METADATA_PATH,
+        threshold=THRESHOLD_PATH,
+    )
+except ArtifactGuardError as exc:
+    raise RuntimeError(
+        f"V2 artifact integrity verification failed: {exc}"
+    ) from exc
 
 
 # ============================================================
 # Load production artifacts
 # ============================================================
 
-with open(METADATA_PATH, "r") as f:
+with open(METADATA_PATH, "r", encoding="utf-8") as f:
     METADATA = json.load(f)
 
-with open(SCALER_PATH, "r") as f:
+with open(SCALER_PATH, "r", encoding="utf-8") as f:
     SCALER = json.load(f)
 
-with open(THRESHOLD_PATH, "r") as f:
+with open(THRESHOLD_PATH, "r", encoding="utf-8") as f:
     THRESHOLD_CONFIG = json.load(f)
 
 
 FEATURES = METADATA["input_features"]
 FEATURE_COUNT = len(FEATURES)
 
-PRODUCTION_THRESHOLD = float(
-    THRESHOLD_CONFIG["threshold"]
+# Strict schema/version/feature-order validation.
+validate_metadata(METADATA, FEATURES)
+validate_scaler(SCALER, FEATURES)
+
+PRODUCTION_THRESHOLD = validate_threshold_config(
+    THRESHOLD_CONFIG
 )
 
 
@@ -52,7 +86,7 @@ PRODUCTION_THRESHOLD = float(
 
 def build_model():
     return torch.nn.Sequential(
-        torch.nn.Linear(16, 64),
+        torch.nn.Linear(FEATURE_COUNT, 64),
         torch.nn.ReLU(),
         torch.nn.Linear(64, 32),
         torch.nn.ReLU(),
@@ -64,62 +98,19 @@ def build_model():
 
 
 # ============================================================
-# Load model
+# Load model (safe: weights_only=True + strict schema contract)
 # ============================================================
 
-checkpoint = torch.load(
-    MODEL_PATH,
-    map_location="cpu",
+STATE_DICT = load_v2_weights(MODEL_PATH)
+
+MODEL = build_model()
+
+MODEL.load_state_dict(
+    {
+        k.removeprefix("network."): v
+        for k, v in STATE_DICT.items()
+    }
 )
-
-if isinstance(checkpoint, torch.nn.Module):
-
-    MODEL = checkpoint
-
-else:
-
-    MODEL = build_model()
-
-    if isinstance(checkpoint, dict):
-
-        if "state_dict" in checkpoint:
-            state_dict = checkpoint["state_dict"]
-
-        else:
-            state_dict = checkpoint
-
-        # V2 training saves keys as:
-        # network.0.weight
-        #
-        # Sequential expects:
-        # 0.weight
-        #
-        # Normalize automatically.
-
-        normalized_state_dict = {}
-
-        for key, value in state_dict.items():
-
-            if key.startswith("network."):
-                new_key = key.replace(
-                    "network.",
-                    "",
-                    1,
-                )
-            else:
-                new_key = key
-
-            normalized_state_dict[new_key] = value
-
-        MODEL.load_state_dict(
-            normalized_state_dict
-        )
-
-    else:
-        raise RuntimeError(
-            "Unsupported V2 model checkpoint format."
-        )
-
 
 MODEL.eval()
 
@@ -165,22 +156,6 @@ def clamp(
     )
 
 
-def safe_float(
-    data,
-    key,
-    default=0.0,
-):
-    try:
-        return float(
-            data.get(key, default)
-        )
-    except (
-        TypeError,
-        ValueError,
-    ):
-        return float(default)
-
-
 # ============================================================
 # ML Prediction
 # ============================================================
@@ -196,26 +171,25 @@ def predict_v2(data):
         failure probability
         prediction status
         threshold
+
+    Raises:
+        TelemetryValidationError on missing/invalid/out-of-range input.
     """
 
-    missing = [
-        feature
-        for feature in FEATURES
-        if feature not in data
-    ]
-
-    if missing:
-        raise ValueError(
-            "Missing V2 features: "
-            + ", ".join(missing)
-        )
+    # allow_extra=True: callers may pass enriched dataset rows containing
+    # legitimate context columns (timestamp, asset metadata, derived
+    # features). Required ML features are still strictly validated for
+    # presence, type and physical range. Use validate_telemetry() with
+    # allow_extra=False for a strict external schema boundary.
+    validate_telemetry(
+        data,
+        required_features=FEATURES,
+        allow_extra=True,
+    )
 
     values = np.asarray(
         [
-            safe_float(
-                data,
-                feature,
-            )
+            float(data[feature])
             for feature in FEATURES
         ],
         dtype=np.float32,
@@ -271,48 +245,17 @@ def calculate_operational_risk(data):
     score = 0.0
     reasons = []
 
-    criticality = safe_float(
-        data,
-        "criticality",
-    )
-
-    temperature = safe_float(
-        data,
-        "temperature_c",
-    )
-
-    load = safe_float(
-        data,
-        "load_percent",
-    )
-
-    thd = safe_float(
-        data,
-        "thd_percent",
-    )
-
-    voltage = safe_float(
-        data,
-        "voltage_pu",
-        1.0,
-    )
-
-    frequency = safe_float(
-        data,
-        "frequency_hz",
-        50.0,
-    )
-
-    power_factor = safe_float(
-        data,
-        "power_factor",
-        1.0,
-    )
-
-    previous_faults = safe_float(
-        data,
-        "previous_faults",
-    )
+    # NOTE: telemetry is expected to have been validated by
+    # validate_telemetry() before this function is reached. These
+    # reads are strict: invalid values raise instead of coercing to 0.
+    criticality = float(data["criticality"])
+    temperature = float(data["temperature_c"])
+    load = float(data["load_percent"])
+    thd = float(data["thd_percent"])
+    voltage = float(data.get("voltage_pu", 1.0))
+    frequency = float(data.get("frequency_hz", 50.0))
+    power_factor = float(data.get("power_factor", 1.0))
+    previous_faults = float(data.get("previous_faults", 0.0))
 
     fault_type = str(
         data.get(
@@ -593,13 +536,85 @@ def recommended_action(
 
 
 # ============================================================
+# V2 Trust Boundary
+# ============================================================
+
+def _apply_trust_boundary(data, trusted_source):
+    """
+    Determine whether telemetry can be trusted for autonomous
+    LOW/NORMAL classification.
+
+    Untrusted telemetry is escalated to INVESTIGATION whenever there is:
+        - a severe physical condition
+        - a cross-measurement inconsistency
+        - an elevated ML failure probability (>= 0.50, WATCH band)
+        - a non-trivial previous fault history reported by the client
+
+    Provenance cannot be established cryptographically here; this layer
+    only guarantees that unverifiable abnormal telemetry fails safe.
+    """
+    reasons = []
+
+    if trusted_source:
+        return {
+            "applied": False,
+            "investigate": False,
+            "reasons": [],
+        }
+
+    boundary_reasons = list(
+        is_severe_physical(data)
+    )
+
+    inconsistency_reasons = consistency_checks(data)
+
+    if inconsistency_reasons:
+        boundary_reasons.extend(
+            [
+                "Telemetry inconsistency: " + r
+                for r in inconsistency_reasons
+            ]
+        )
+
+    previous_faults = data.get("previous_faults", 0.0)
+    if isinstance(previous_faults, (int, float)) \
+            and not isinstance(previous_faults, bool) \
+            and float(previous_faults) >= 2.0:
+        boundary_reasons.append(
+            "Client-reported historical fault count "
+            "cannot be trusted without provenance"
+        )
+
+    investigate = bool(boundary_reasons)
+
+    for r in boundary_reasons:
+        reasons.append(
+            "Trust boundary: " + r
+        )
+
+    return {
+        "applied": investigate,
+        "investigate": investigate,
+        "reasons": reasons,
+    }
+
+
+# ============================================================
 # V2 Risk Assessment
 # ============================================================
 
 
-def assess_risk_v2(data):
+def assess_risk_v2(data, trusted_source=False):
     """
     Complete GridSentinel V2.1 risk assessment.
+
+    Parameters:
+        data: validated telemetry dictionary.
+        trusted_source: False unless the caller can prove authenticated,
+            server-collected provenance. Untrusted telemetry is treated
+            as unsafe for autonomous LOW/NORMAL classification whenever
+            any abnormal signal, inconsistency, or high ML probability
+            is present (fail-safe to INVESTIGATION instead).
 
     Pipeline:
         1. V2 ML prediction
@@ -610,6 +625,21 @@ def assess_risk_v2(data):
         6. Final risk classification
         7. Engineering interpretation/action
     """
+
+    # ============================================================
+    # 0. STRICT TELEMETRY VALIDATION + TRUST BOUNDARY
+    # ============================================================
+
+    validate_telemetry(
+        data,
+        required_features=FEATURES,
+        allow_extra=True,
+    )
+
+    trust_boundary = _apply_trust_boundary(
+        data=data,
+        trusted_source=bool(trusted_source),
+    )
 
     # ============================================================
     # 1. ML PREDICTION
@@ -771,6 +801,66 @@ def assess_risk_v2(data):
         )
 
     # ============================================================
+    # 9b. TRUST BOUNDARY ENFORCEMENT
+    # ============================================================
+    # Untrusted telemetry with any abnormal signal, physical severity,
+    # inconsistency, or elevated ML probability is escalated to an
+    # INVESTIGATION state and must never silently become LOW/NORMAL.
+    # This does not pretend cryptographic trust; it fails safe.
+
+    boundary_reasons = list(
+        trust_boundary.get("reasons", [])
+    )
+    boundary_applied = bool(
+        trust_boundary.get("applied", False)
+    )
+
+    investigate = bool(
+        trust_boundary.get("investigate", False)
+    )
+
+    # Elevated ML probability from untrusted telemetry can never be
+    # treated as NORMAL; route to investigation instead.
+    if (
+        not trusted_source
+        and probability >= 0.50
+        and alert_state != "FAILURE_ALERT"
+    ):
+        investigate = True
+        reason = (
+            "Trust boundary: elevated ML failure probability "
+            "from unverified telemetry"
+        )
+        if reason not in boundary_reasons:
+            boundary_reasons.append(reason)
+
+    if investigate:
+        alert_state = "INVESTIGATION"
+        boundary_applied = True
+
+        for reason in boundary_reasons:
+            if reason not in guard_reasons:
+                guard_reasons.append(reason)
+            if reason not in reasons:
+                reasons.append(reason)
+
+    # ============================================================
+    # 9c. INVESTIGATION ACTION / INTERPRETATION
+    # ============================================================
+
+    if alert_state == "INVESTIGATION":
+        action = (
+            "Telemetry provenance could not be verified while "
+            "abnormal or inconsistent signals are present. "
+            "Engineering investigation required before relying "
+            "on a LOW/NORMAL assessment."
+        )
+        interpretation = (
+            "Unverified telemetry with abnormal signals. "
+            "Cannot safely classify as normal; investigation required."
+        )
+
+    # ============================================================
     # 10. FINAL RESULT
     # ============================================================
 
@@ -818,4 +908,10 @@ def assess_risk_v2(data):
         "interpretation": interpretation,
 
         "recommended_action": action,
+
+        "telemetry_trusted": trusted_source,
+
+        "trust_boundary_applied": boundary_applied,
+
+        "trust_boundary_reasons": boundary_reasons,
     }

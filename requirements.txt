@@ -1,0 +1,12 @@
+# GridSentinel AI - Runtime dependency manifest
+#
+# Pinned to the exact versions verified in the current working
+# environment (Python 3.14.6). The V2 training/evaluation/inference
+# pipeline and all security tests were run against these.
+#
+# Do NOT upgrade packages without re-running the full test suite.
+
+torch==2.11.0
+numpy==2.4.4
+pandas==3.0.5
+scikit-learn==1.9.0
