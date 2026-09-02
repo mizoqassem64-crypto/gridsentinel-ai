@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import signal
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,16 +26,17 @@ from .middleware import (
     correlation_id,
     log_event,
 )
-from ai.ml.artifact_guard import TelemetryValidationError
 
 
 # ---------------------------------------------------------------------------
 # Engine bootstrap (lazy, thread-safe)
 # ---------------------------------------------------------------------------
 # Importing ai.ml.risk_engine_v2 runs V2 artifact manifest verification
-# (fail closed) and loads the model. That work is deferred until the first
-# authenticated, validated assessment so /health and client-side 4xx
-# failures never require the model to be resident.
+# (fail closed) and loads the model (torch/numpy). That work - and the heavy
+# ai.ml.artifact_guard dependency it pulls in - is deferred until the first
+# authenticated, validated assessment, so /health and client-side 4xx
+# failures never require the model to be resident and the accept loop is
+# reachable almost immediately after process start.
 
 _ENGINE: Dict[str, Any] = {}
 _ENGINE_LOCK = threading.Lock()
@@ -50,6 +52,22 @@ def _get_engine():
 
         _ENGINE["fn"] = assess_risk_v2
         return _ENGINE["fn"]
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+# SIGTERM (systemd stop, ``kill``, ``subprocess.terminate()``) stops the
+# accept loop, drains in-flight handler threads, and lets the process exit
+# cleanly. http.server.shutdown() must be called from a thread OTHER than the
+# one running serve_forever(), so a lightweight watcher performs it once the
+# signal flag is raised. SIGINT keeps its normal KeyboardInterrupt path.
+
+_SHUTDOWN_REQUESTED = threading.Event()
+
+
+def _request_shutdown(signum, frame) -> None:
+    _SHUTDOWN_REQUESTED.set()
 
 
 class GridSentinelServer(ThreadingHTTPServer):
@@ -223,24 +241,29 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             envelope = self._envelope(self._correlation_id, result)
             self._write_json(200, envelope)
             self._log_record(status=200, duration_ms=time.monotonic() - started)
-        except TelemetryValidationError:
-            # Defensive: the engine's own guard flagged something the
-            # schema layer did not. Never echo engine exception text.
-            self._fail(
-                err.validation_failed(
-                    {"telemetry": "Telemetry failed engine-level validation."}
-                ),
-                started=started,
-            )
-        except err.ApiError as api:
-            self._fail(api, started=started)
-        except Exception:
-            # Never leak tracebacks, exception text, paths, or state to the
-            # client. Full traceback is emitted to the server-side log only.
-            logging.getLogger("gridsentinel.api").exception(
-                "unhandled_api_exception"
-            )
-            self._fail(err.internal_error(), started=started)
+        except Exception as exc:
+            # ai.ml.artifact_guard (torch/numpy) is imported lazily so the
+            # process can accept connections without the ML stack resident.
+            from ai.ml.artifact_guard import TelemetryValidationError
+
+            if isinstance(exc, TelemetryValidationError):
+                # Defensive: the engine's own guard flagged something the
+                # schema layer did not. Never echo engine exception text.
+                self._fail(
+                    err.validation_failed(
+                        {"telemetry": "Telemetry failed engine-level validation."}
+                    ),
+                    started=started,
+                )
+            elif isinstance(exc, err.ApiError):
+                self._fail(exc, started=started)
+            else:
+                # Never leak tracebacks, exception text, paths, or state to
+                # the client. Full traceback is emitted to the log only.
+                logging.getLogger("gridsentinel.api").exception(
+                    "unhandled_api_exception"
+                )
+                self._fail(err.internal_error(), started=started)
 
     @staticmethod
     def _envelope(request_id: str, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -315,11 +338,29 @@ def main(argv=None) -> None:
     logging.getLogger("gridsentinel.api").info(
         f"{SERVICE_NAME} listening on {bound_host}:{bound_port}"
     )
+
+    # Signal registration requires the main thread; keep the default SIGINT
+    # (KeyboardInterrupt) behavior for interactive use.
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, _request_shutdown)
+
+    # shutdown() must not run on the serve_forever() thread, so a dedicated
+    # watcher performs it once a shutdown signal has been received.
+    def _watch_shutdown() -> None:
+        _SHUTDOWN_REQUESTED.wait()
+        httpd.shutdown()
+
+    threading.Thread(
+        target=_watch_shutdown, daemon=True, name="gridsentinel-shutdown"
+    ).start()
+
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        # Harmless if already set; guarantees the accept loop has exited.
+        httpd.shutdown()
         httpd.server_close()
 
 

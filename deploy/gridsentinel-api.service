@@ -1,0 +1,45 @@
+# GridSentinel API V2 - systemd unit (template)
+# ------------------------------------------------------------
+# Deploy on a Linux/glibc host (systemd is not available on Android/Termux).
+#
+#   sudo install -o root -g root -m 0644 deploy/gridsentinel-api.service \
+#       /etc/systemd/system/gridsentinel-api.service
+#   sudo install -o root -g root -m 0600 /path/to/api.env \
+#       /etc/gridsentinel/api.env          # GRIDSENTINEL_API_KEY=<key>
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now gridsentinel-api
+#
+# The server drains in-flight requests on SIGTERM (systemctl stop) and
+# exits 0. models/ is read-only at runtime.
+
+[Unit]
+Description=GridSentinel AI V2 inference API
+After=network.target
+
+[Service]
+Type=simple
+User=gridsentinel
+Group=gridsentinel
+WorkingDirectory=/srv/gridsentinel
+EnvironmentFile=/etc/gridsentinel/api.env
+ExecStart=/srv/gridsentinel/deploy/run_api.sh --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillSignal=SIGTERM
+KillMode=control-group
+SendSIGKILL=yes
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

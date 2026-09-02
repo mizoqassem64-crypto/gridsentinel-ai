@@ -1,0 +1,32 @@
+# GridSentinel API V2 - compose stack (template)
+# ------------------------------------------------------------
+# Run on a Linux/glibc host only (containers cannot run on Android/Termux).
+#
+#   printf 'GRIDSENTINEL_API_KEY=<key>\n' > .env.api   # key never committed
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# The API key comes from the env file at runtime and is never baked into the
+# image or committed to the repository. The container rootfs is read-only;
+# /tmp is the only writable surface. Bound to loopback - put a TLS reverse
+# proxy or proxy sidecar in front for any non-local client.
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: gridsentinel-api
+    env_file:
+      - ../.env.api
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
