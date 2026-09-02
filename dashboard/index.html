@@ -604,11 +604,50 @@ body {
 .fw-600 { font-weight: 600; }
 .mt-4 { margin-top: 4px; }
 .mb-8 { margin-bottom: 8px; }
+
+/* ---- Loading / error states (H2) ---- */
+.status-dot.disconnected { background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+.status-dot.connecting   { background: var(--amber); animation: pulse-dot 1.2s ease-in-out infinite; }
+@keyframes pulse-dot { 0%,100%{ opacity:1 } 50%{ opacity:0.3 } }
+
+.asset-card.loading  { opacity: 0.6; }
+.panel.loading       { opacity: 0.6; }
+
+.loading-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.82rem;
+}
+
+.error-banner {
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 0.82rem;
+  color: var(--red);
+  display: none;
+}
+.error-banner.visible { display: block; }
+
+.state-initial .telem-value,
+.state-initial .gauge-value,
+.state-initial .detail-val,
+.state-initial .sc-value,
+.state-initial .mono {
+  color: var(--text-muted) !important;
+}
 </style>
 </head>
-<body>
+<body class="state-initial">
 
 <div class="dashboard">
+
+  <!-- API connection error banner -->
+  <div class="error-banner" id="error-banner">
+    API connection lost. Showing last known state. Retrying&hellip;
+  </div>
 
   <!-- ============================================================
        A. HEADER
@@ -939,25 +978,491 @@ body {
 </div>
 
 <!-- ============================================================
-     Minimal JS — timestamp, no dependencies.
-     H2/H3 will connect this to the live API.
+     GridSentinel AI — Dashboard H2: Live Telemetry + Risk Display
+     Connects to existing backend API. Zero external dependencies.
      ============================================================ -->
 <script>
 (function () {
   "use strict";
 
-  /* ---- Live clock ---- */
+  // ==============================================================
+  // CONFIGURATION
+  // ==============================================================
+
+  var API_BASE = "http://127.0.0.1:8000";
+  var API_KEY   = "gridsentinel-demo-key";
+  var HEALTH_INTERVAL_MS  = 10000;
+  var ASSESS_INTERVAL_MS  = 15000;
+  var FETCH_TIMEOUT_MS    = 8000;
+
+  // ==============================================================
+  // BASELINE TELEMETRY — normal operating conditions per asset
+  // All 16 ML features + optional fields. Physically consistent.
+  // ==============================================================
+
+  var TELEMETRY = {
+    T01: {
+      asset_id: "T01", asset_type: "transformer", fault_type: "normal",
+      rated_mva: 40.0, asset_age_years: 6, criticality: 0.9,
+      voltage_pu: 0.9999, current_a: 442.72, frequency_hz: 49.965,
+      active_power_mw: 22.968, reactive_power_mvar: 7.242,
+      power_factor: 0.9291, temperature_c: 62.6,
+      load_percent: 66.9, thd_percent: 2.67, previous_faults: 0,
+      voltage_deviation: 0.0001, frequency_deviation: 0.035,
+      temperature_excess: 7.6, electrical_stress: 0.249
+    },
+    T02: {
+      asset_id: "T02", asset_type: "transformer", fault_type: "normal",
+      rated_mva: 63.0, asset_age_years: 11, criticality: 1.0,
+      voltage_pu: 0.9298, current_a: 783.4, frequency_hz: 49.894,
+      active_power_mw: 42.084, reactive_power_mvar: 12.696,
+      power_factor: 0.9574, temperature_c: 72.0,
+      load_percent: 72.61, thd_percent: 4.571, previous_faults: 1,
+      voltage_deviation: 0.0702, frequency_deviation: 0.106,
+      temperature_excess: 17.0, electrical_stress: 0.934
+    },
+    T03: {
+      asset_id: "T03", asset_type: "transformer", fault_type: "normal",
+      rated_mva: 40.0, asset_age_years: 17, criticality: 1.0,
+      voltage_pu: 1.032, current_a: 505.8, frequency_hz: 49.98,
+      active_power_mw: 26.5, reactive_power_mvar: 11.2,
+      power_factor: 0.88, temperature_c: 81.5,
+      load_percent: 82.0, thd_percent: 5.2, previous_faults: 3,
+      voltage_deviation: 0.032, frequency_deviation: 0.02,
+      temperature_excess: 26.5, electrical_stress: 1.347
+    }
+  };
+
+  var ASSET_IDS = ["T01", "T02", "T03"];
+  var ASSESS_IDS = ASSET_IDS;
+
+  // ==============================================================
+  // STATE
+  // ==============================================================
+
+  var state = {
+    apiConnected: false,
+    firstAssessDone: false,
+    assessments: {},
+    gridWorst: "LOW",
+    gridAlertCount: 0
+  };
+
+  // ==============================================================
+  // CLOCK
+  // ==============================================================
+
   function updateClock() {
     var el = document.getElementById("header-time");
     if (!el) return;
     var now = new Date();
-    var h = String(now.getHours()).padStart(2, "0");
-    var m = String(now.getMinutes()).padStart(2, "0");
-    var s = String(now.getSeconds()).padStart(2, "0");
-    el.textContent = h + ":" + m + ":" + s;
+    el.textContent =
+      String(now.getHours()).padStart(2, "0") + ":" +
+      String(now.getMinutes()).padStart(2, "0") + ":" +
+      String(now.getSeconds()).padStart(2, "0");
   }
   updateClock();
   setInterval(updateClock, 1000);
+
+  // ==============================================================
+  // HELPERS
+  // ==============================================================
+
+  function riskColor(level) {
+    if (level === "CRITICAL") return "red";
+    if (level === "HIGH")     return "amber";
+    if (level === "MEDIUM")   return "amber";
+    return "green";
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function riskNumeric(level) {
+    if (level === "CRITICAL") return 3;
+    if (level === "HIGH")     return 2;
+    if (level === "MEDIUM")   return 1;
+    return 0;
+  }
+
+  function worstRisk(a, b) {
+    return riskNumeric(a) >= riskNumeric(b) ? a : b;
+  }
+
+  function setApiStatus(connected) {
+    var dot  = document.getElementById("api-dot");
+    var txt  = document.getElementById("api-status");
+    var banner = document.getElementById("error-banner");
+    if (!dot || !txt) return;
+
+    state.apiConnected = connected;
+
+    if (connected) {
+      dot.className = "status-dot green";
+      txt.textContent = "Connected";
+      banner.classList.remove("visible");
+    } else {
+      dot.className = "status-dot disconnected";
+      txt.textContent = "Disconnected";
+      banner.classList.add("visible");
+    }
+  }
+
+  function setApiConnecting() {
+    var dot = document.getElementById("api-dot");
+    var txt = document.getElementById("api-status");
+    if (dot) dot.className = "status-dot connecting";
+    if (txt) txt.textContent = "Connecting\u2026";
+  }
+
+  // ==============================================================
+  // FETCH WRAPPER
+  // ==============================================================
+
+  function apiFetch(method, path, body) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
+
+    var opts = {
+      method: method,
+      headers: {
+        "X-API-Key": API_KEY,
+        "Content-Type": "application/json"
+      },
+      signal: controller.signal
+    };
+    if (body) opts.body = typeof body === "string" ? body : JSON.stringify(body);
+
+    return fetch(API_BASE + path, opts).then(function (res) {
+      clearTimeout(timer);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).catch(function (err) {
+      clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  // ==============================================================
+  // HEALTH CHECK
+  // ==============================================================
+
+  function checkHealth() {
+    setApiConnecting();
+    apiFetch("GET", "/health").then(function () {
+      setApiStatus(true);
+    }).catch(function () {
+      setApiStatus(false);
+    });
+  }
+
+  // ==============================================================
+  // ASSESSMENT
+  // ==============================================================
+
+  function assessAsset(id) {
+    var payload = Object.assign({}, TELEMETRY[id]);
+    return apiFetch("POST", "/v1/assess", payload).then(function (env) {
+      return { id: id, ok: true, data: env };
+    }).catch(function (err) {
+      return { id: id, ok: false, error: err };
+    });
+  }
+
+  function runAssessments() {
+    var promises = ASSESS_IDS.map(assessAsset);
+    Promise.all(promises).then(function (results) {
+      var anySuccess = false;
+      var worst = "LOW";
+      var alerts = 0;
+
+      results.forEach(function (r) {
+        if (!r.ok) return;
+        anySuccess = true;
+        var res = r.data.result || {};
+        state.assessments[r.id] = res;
+
+        var rc = res.risk_classification || "LOW";
+        worst = worstRisk(worst, rc);
+
+        if (res.alert_state === "FAILURE_ALERT" ||
+            res.alert_state === "INVESTIGATION" ||
+            res.investigation_required) {
+          alerts++;
+        }
+
+        updateAssetCard(r.id, res);
+      });
+
+      if (anySuccess) {
+        state.firstAssessDone = true;
+        setApiStatus(true);
+        state.gridWorst = worst;
+        state.gridAlertCount = alerts;
+        updateGridOverview();
+        updateRiskPanel();
+        updateTelemetryOverview();
+        updateAIDecisionPanel();
+
+        document.body.classList.remove("state-initial");
+      }
+    });
+  }
+
+  // ==============================================================
+  // UI UPDATES
+  // ==============================================================
+
+  function updateAssetCard(id, res) {
+    var prefix = id.toLowerCase();
+    var rc = res.risk_classification || "LOW";
+    var color = riskColor(rc);
+    var prob = res.failure_probability;
+
+    // Badge
+    var badge = document.getElementById("badge-" + prefix);
+    if (badge) {
+      badge.textContent = rc;
+      badge.className = "risk-badge " + rc;
+    }
+
+    // Telemetry values — use the input telemetry for display
+    var t = TELEMETRY[id];
+    var tempEl = document.getElementById(prefix + "-temp");
+    var loadEl = document.getElementById(prefix + "-load");
+    var voltEl = document.getElementById(prefix + "-volt");
+    var thdEl  = document.getElementById(prefix + "-thd");
+
+    if (tempEl) {
+      tempEl.textContent = t.temperature_c.toFixed(1) + " \u00B0C";
+      tempEl.className = "telem-value " + (t.temperature_c >= 85 ? "amber" : t.temperature_c >= 100 ? "red" : "");
+    }
+    if (loadEl) {
+      loadEl.textContent = t.load_percent.toFixed(1) + "%";
+      loadEl.className = "telem-value " + (t.load_percent >= 80 ? "amber" : t.load_percent >= 90 ? "red" : "");
+    }
+    if (voltEl) {
+      voltEl.textContent = t.voltage_pu.toFixed(3) + " pu";
+      var vd = Math.abs(t.voltage_pu - 1.0);
+      voltEl.className = "telem-value " + (vd >= 0.05 ? "red" : vd >= 0.03 ? "amber" : "");
+    }
+    if (thdEl) {
+      thdEl.textContent = t.thd_percent.toFixed(2) + "%";
+      thdEl.className = "telem-value " + (t.thd_percent >= 10 ? "red" : t.thd_percent >= 5 ? "amber" : "");
+    }
+
+    // Failure probability
+    var probEl = document.getElementById(prefix + "-prob");
+    if (probEl) {
+      probEl.textContent = prob != null ? prob.toFixed(3) : "--";
+      probEl.className = "mono fw-600 text-" + color;
+    }
+
+    // Card border highlight for critical/high
+    var card = document.getElementById("card-" + prefix);
+    if (card) {
+      if (rc === "CRITICAL") {
+        card.style.borderColor = "var(--red)";
+      } else if (rc === "HIGH") {
+        card.style.borderColor = "#fb923c";
+      } else {
+        card.style.borderColor = "";
+      }
+    }
+  }
+
+  function updateGridOverview() {
+    var kpiLevel = document.getElementById("kpi-risk-level");
+    var kpiScore = document.getElementById("kpi-risk-score");
+    var kpiAlerts = document.getElementById("kpi-alerts");
+    var kpiAlertsSub = kpiAlerts ? kpiAlerts.parentElement.querySelector(".sc-sub") : null;
+
+    if (kpiLevel) {
+      kpiLevel.textContent = state.gridWorst;
+      kpiLevel.className = "sc-value text-" + riskColor(state.gridWorst);
+    }
+    if (kpiScore) {
+      // Show the highest individual risk score
+      var maxScore = 0;
+      ASSESS_IDS.forEach(function (id) {
+        var r = state.assessments[id];
+        if (r && r.risk_score > maxScore) maxScore = r.risk_score;
+      });
+      kpiScore.textContent = "Score: " + maxScore.toFixed(0);
+    }
+    if (kpiAlerts) {
+      kpiAlerts.textContent = state.gridAlertCount;
+      kpiAlerts.className = "sc-value " + (state.gridAlertCount > 0 ? "text-amber" : "text-green");
+    }
+    if (kpiAlertsSub) {
+      kpiAlertsSub.textContent = state.gridAlertCount > 0
+        ? state.gridAlertCount + " active"
+        : "No anomalies";
+    }
+  }
+
+  function updateRiskPanel() {
+    // Use the worst asset for the grid risk panel
+    var worstId = null;
+    var worstLevel = "LOW";
+    ASSESS_IDS.forEach(function (id) {
+      var r = state.assessments[id];
+      if (!r) return;
+      var rc = r.risk_classification || "LOW";
+      if (riskNumeric(rc) > riskNumeric(worstLevel)) {
+        worstLevel = rc;
+        worstId = id;
+      }
+    });
+
+    if (!worstId) return;
+    var res = state.assessments[worstId];
+
+    var gauge = document.getElementById("risk-gauge");
+    var levelText = document.getElementById("risk-level-text");
+    var probText = document.getElementById("risk-prob");
+    var mlText = document.getElementById("risk-ml");
+    var opText = document.getElementById("risk-op");
+    var alertText = document.getElementById("risk-alert");
+
+    if (gauge) {
+      var score = res.risk_score || 0;
+      gauge.textContent = Math.round(score);
+      gauge.className = "risk-gauge " + worstLevel;
+    }
+    if (levelText) levelText.textContent = worstLevel;
+    if (probText) probText.textContent =
+      res.failure_probability != null ? res.failure_probability.toFixed(3) : "--";
+    // ml_score and operational_score are not in the API envelope.
+    // Derive from the engine's weighting: ml=prob*60, op=risk-ml.
+    var prob = res.failure_probability || 0;
+    var score = res.risk_score || 0;
+    var derivedMl = prob * 60;
+    var derivedOp = score - derivedMl;
+    if (mlText) mlText.textContent = derivedMl.toFixed(2);
+    if (opText) opText.textContent = derivedOp.toFixed(2);
+    if (alertText) {
+      var alertState = res.alert_state || "NORMAL";
+      alertText.textContent = alertState;
+      alertText.className = "detail-val " + (
+        alertState === "FAILURE_ALERT" ? "text-red" :
+        alertState === "INVESTIGATION" ? "text-amber" :
+        "text-green"
+      );
+    }
+  }
+
+  function updateTelemetryOverview() {
+    // Average across all assets
+    var sumTemp = 0, sumLoad = 0, sumVolt = 0, sumThd = 0;
+    var count = 0;
+
+    ASSESS_IDS.forEach(function (id) {
+      var t = TELEMETRY[id];
+      sumTemp += t.temperature_c;
+      sumLoad += t.load_percent;
+      sumVolt += t.voltage_pu;
+      sumThd  += t.thd_percent;
+      count++;
+    });
+
+    if (count === 0) return;
+
+    var avgTemp = sumTemp / count;
+    var avgLoad = sumLoad / count;
+    var avgVolt = sumVolt / count;
+    var avgThd  = sumThd  / count;
+
+    setText("ov-temp", avgTemp.toFixed(1));
+    setText("ov-load", avgLoad.toFixed(1));
+    setText("ov-volt", avgVolt.toFixed(3));
+    setText("ov-thd",  avgThd.toFixed(2));
+
+    setBar("bar-temp", clamp(avgTemp / 200 * 100, 2, 100), avgTemp >= 85 ? "amber" : "green");
+    setBar("bar-load", clamp(avgLoad / 130 * 100, 2, 100), avgLoad >= 80 ? "amber" : "green");
+    setBar("bar-volt", clamp(avgVolt / 1.15 * 100, 2, 100), "blue");
+    setBar("bar-thd",  clamp(avgThd / 30 * 100, 2, 100),  avgThd >= 10 ? "red" : avgThd >= 5 ? "amber" : "green");
+  }
+
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function setBar(id, pct, colorClass) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.width = pct + "%";
+    el.className = "gauge-bar-fill " + colorClass;
+  }
+
+  function updateAIDecisionPanel() {
+    // Collect all reasons from all assets, deduplicated
+    var allReasons = [];
+    ASSESS_IDS.forEach(function (id) {
+      var r = state.assessments[id];
+      if (!r || !r.reasons) return;
+      r.reasons.forEach(function (reason) {
+        if (allReasons.indexOf(reason) === -1) allReasons.push(reason);
+      });
+    });
+
+    var factorList = document.getElementById("factor-list");
+    if (factorList) {
+      if (allReasons.length === 0) {
+        factorList.innerHTML = '<li>No anomalies detected</li>';
+      } else {
+        factorList.innerHTML = allReasons.map(function (r) {
+          return "<li>" + escapeHtml(r) + "</li>";
+        }).join("");
+      }
+    }
+
+    // Recommended action — use worst asset
+    var worstAction = "Continue normal operation with routine monitoring.";
+    var worstInterpretation = "";
+    var worstLevel = "LOW";
+    ASSESS_IDS.forEach(function (id) {
+      var r = state.assessments[id];
+      if (!r) return;
+      var rc = r.risk_classification || "LOW";
+      if (riskNumeric(rc) > riskNumeric(worstLevel)) {
+        worstLevel = rc;
+        worstAction = r.recommended_action || worstAction;
+        worstInterpretation = r.interpretation || "";
+      }
+    });
+
+    var actionEl = document.getElementById("rec-action");
+    if (actionEl) {
+      var html = escapeHtml(worstAction);
+      if (worstInterpretation) {
+        html += '<p class="mt-4 text-muted" style="font-size:0.78rem;">' +
+                escapeHtml(worstInterpretation) + "</p>";
+      }
+      actionEl.innerHTML = html;
+    }
+  }
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ==============================================================
+  // INITIALIZATION
+  // ==============================================================
+
+  // Initial health check, then start polling
+  checkHealth();
+  setInterval(checkHealth, HEALTH_INTERVAL_MS);
+
+  // First assessment immediately, then periodic
+  runAssessments();
+  setInterval(runAssessments, ASSESS_INTERVAL_MS);
 
 })();
 </script>
