@@ -1,0 +1,14 @@
+# Build-context hygiene for deploy/Dockerfile
+.git
+.gitignore
+.github
+.vscode
+*.pyc
+__pycache__/
+*.env
+.env
+.env.*
+datasets/
+docs/
+backend/tests/
+ai/ml/test_safety_hardening.py

@@ -31,7 +31,12 @@ Environment-only. No config file is read.
 | `GRIDSENTINEL_MAX_BODY_BYTES` | `65536` | Maximum accepted request body. |
 | `GRIDSENTINEL_RATE_LIMIT_REQUESTS` | `60` | Fixed-window request budget per client IP (in-process, per worker). |
 | `GRIDSENTINEL_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window. |
+| `GRIDSENTINEL_SOCKET_TIMEOUT` | `10.0` | Per-connection socket timeout (seconds) on request handlers. A stalled/slow client is disconnected after this; bounds slowloris and shutdown-drain time. |
+| `GRIDSENTINEL_MAX_CONCURRENT` | `32` | Max in-flight handler threads. Connections beyond the cap receive an immediate `503 server_overloaded` response (no thread is spawned). |
 | `GRIDSENTINEL_LOG_LEVEL` | `INFO` | Structured JSON log level (stderr). |
+
+Request lines longer than 4096 bytes are rejected with `414`; the standard
+library additionally bounds header lines (~64 KiB) and header count (100).
 
 The rate limiter is intentionally in-process and per-worker; it is not a
 substitute for a shared limiter/API gateway in multi-worker or multi-node
@@ -108,13 +113,18 @@ docker run -d --read-only --tmpfs /tmp \
 
 ## Known operational limitations
 
-- `server_close()` joins in-flight handler threads without a timeout; a
-  deliberately stalled client can therefore prolong shutdown. No socket
-  timeouts are set on request handlers.
+- A deliberately stalled client can still delay shutdown briefly, but the
+  per-connection socket timeout (default 10s) now bounds how long any
+  handler can block a graceful drain.
 - Per-process rate limiting only (resets on restart; no shared state).
+  Memory stays bounded by periodic window sweeps and oldest-entry eviction
+  (live windows are never cleared).
 - No built-in TLS (loopback bind + reverse proxy required for any remote
   access).
 - No native log rotation (rotate externally).
+- The in-process concurrency cap is a first line of defense; a multi-worker
+  deployment should still front the API with a gateway/rate limiter so the
+  cap applies per worker, not globally.
 
 ## Deployment verification
 

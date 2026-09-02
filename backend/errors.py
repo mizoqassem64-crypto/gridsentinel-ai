@@ -117,6 +117,14 @@ def server_misconfigured() -> ApiError:
     )
 
 
+def overloaded() -> ApiError:
+    return ApiError(
+        503,
+        "server_overloaded",
+        "Server is at request capacity. Retry shortly.",
+    )
+
+
 def internal_error() -> ApiError:
     return ApiError(
         500,

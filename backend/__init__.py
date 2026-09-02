@@ -33,6 +33,10 @@ Security model
   protection against accidental overload. It is deliberately single-worker
   and is NOT a substitute for a shared, distributed rate limiter / API
   gateway in multi-worker deployments.
+* Per-connection socket timeouts and a bounded concurrent-request cap
+  (excess connections receive a 503 ``server_overloaded`` response, no
+  thread is spawned) prevent slow-client and thread-exhaustion denial of
+  service. Request lines are capped to 4096 bytes.
 
 Run (from the repository root):
     PYTHONPATH="$(pwd)" GRIDSENTINEL_API_KEY=... \

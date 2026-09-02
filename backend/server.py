@@ -4,8 +4,11 @@ import json
 import logging
 import os
 import signal
+import socket
+import sys
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict
 
@@ -41,6 +44,10 @@ from .middleware import (
 _ENGINE: Dict[str, Any] = {}
 _ENGINE_LOCK = threading.Lock()
 
+_DEFAULT_SOCKET_TIMEOUT = 10.0
+_DEFAULT_MAX_CONCURRENT = 32
+_MAX_REQUEST_LINE = 4096
+
 
 def _get_engine():
     with _ENGINE_LOCK:
@@ -74,10 +81,95 @@ class GridSentinelServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+    def process_request(self, request, client_address):
+        guard = getattr(self, "concurrency_guard", None)
+        if guard is not None and not guard.acquire(blocking=False):
+            self._reject_overload(request, client_address)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            guard = getattr(self, "concurrency_guard", None)
+            if guard is not None:
+                guard.release()
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        log_event(
+            {
+                "ts": time.time(),
+                "level": "warn",
+                "client_ip_hash": client_ip_hash(client_address[0]),
+                "principal": hashed_principal(),
+                "error_category": (
+                    "handler_error_" + type(exc).__name__ if exc else "handler_error"
+                ),
+                "status": 0,
+            }
+        )
+
+    def _reject_overload(self, request, client_address) -> None:
+        request_id = uuid.uuid4().hex
+        api = err.overloaded()
+        envelope = err.error_envelope(request_id, api)
+        body = json.dumps(
+            envelope, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        head = (
+            b"HTTP/1.0 503 Service Unavailable\r\n"
+            b"Content-Type: application/json\r\n"
+            + b"Content-Length: " + str(len(body)).encode("utf-8") + b"\r\n"
+            b"Cache-Control: no-store\r\n"
+            b"X-Request-ID: " + request_id.encode("utf-8") + b"\r\n"
+            b"Server: GridSentinel\r\n"
+            b"Connection: close\r\n\r\n"
+        )
+        try:
+            request.settimeout(5.0)
+            request.sendall(head + body)
+        except OSError:
+            pass
+        finally:
+            try:
+                request.close()
+            except OSError:
+                pass
+        log_event(
+            {
+                "ts": time.time(),
+                "level": "warn",
+                "correlation_id": request_id,
+                "status": 503,
+                "client_ip_hash": client_ip_hash(client_address[0]),
+                "principal": hashed_principal(),
+                "error_category": api.code,
+            }
+        )
+
 
 class GridSentinelHandler(BaseHTTPRequestHandler):
     server_version = "GridSentinel"
     sys_version = ""
+
+    def setup(self) -> None:
+        self.timeout = getattr(
+            self.server, "socket_timeout", _DEFAULT_SOCKET_TIMEOUT
+        )
+        super().setup()
+
+    def parse_request(self) -> bool:
+        limit = getattr(self.server, "request_line_limit", _MAX_REQUEST_LINE)
+        if len(getattr(self, "raw_requestline", b"")) > limit:
+            self.requestline = ""
+            self.request_version = ""
+            self.command = ""
+            self.send_error(414)
+            self._log_record(status=414, error_category="request_line_too_long")
+            return False
+        return super().parse_request()
 
     # -- plumbing ----------------------------------------------------------
 
@@ -110,13 +202,13 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             {
                 "ts": time.time(),
                 "level": "warn" if status >= 400 else "info",
-                "correlation_id": self._correlation_id,
+                "correlation_id": getattr(self, "_correlation_id", ""),
                 "status": status,
                 "duration_ms": round(duration_ms * 1000.0, 2),
                 "client_ip_hash": client_ip_hash(self.client_address[0]),
                 "principal": hashed_principal(),
                 "error_category": error_category,
-                "bytes": self._bytes_read,
+                "bytes": getattr(self, "_bytes_read", 0),
             }
         )
 
@@ -301,17 +393,43 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
         self._write_json(api.status, envelope, headers=api.headers)
 
 
+def _require_float(name: str, default: float, minimum: float) -> float:
+    try:
+        value = float(os.environ.get(name, "").strip() or default)
+    except ValueError:
+        value = default
+    return value if value >= minimum else default
+
+
+def _require_int(name: str, default: int, minimum: int) -> int:
+    try:
+        value = int(os.environ.get(name, "").strip() or default)
+    except ValueError:
+        value = default
+    return value if value >= minimum else default
+
+
 def create_server(host: str = "127.0.0.1", port: int = 0) -> GridSentinelServer:
     """Build a ready-to-serve inference server bound to (host, port).
 
-    ``port=0`` selects an ephemeral port (useful for tests). Rate-limiting
-    configuration is read from the environment at construction time.
+    ``port=0`` selects an ephemeral port (useful for tests). Rate limiting,
+    socket timeout, and concurrency configuration are read from the
+    environment at construction time.
     """
     configure_logging()
     limit = int(os.environ.get("GRIDSENTINEL_RATE_LIMIT_REQUESTS", "60"))
     window = int(os.environ.get("GRIDSENTINEL_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    socket_timeout = _require_float(
+        "GRIDSENTINEL_SOCKET_TIMEOUT", _DEFAULT_SOCKET_TIMEOUT, 0.5
+    )
+    max_concurrent = _require_int(
+        "GRIDSENTINEL_MAX_CONCURRENT", _DEFAULT_MAX_CONCURRENT, 1
+    )
     httpd = GridSentinelServer((host, port), GridSentinelHandler)
     httpd.limiter = FixedWindowRateLimiter(limit=limit, window_seconds=window)
+    httpd.socket_timeout = socket_timeout
+    httpd.request_line_limit = _MAX_REQUEST_LINE
+    httpd.concurrency_guard = threading.Semaphore(max_concurrent)
     return httpd
 
 

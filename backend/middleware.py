@@ -85,6 +85,10 @@ def client_ip_hash(address: str) -> str:
     return digest[:12]
 
 
+_RATE_MEMORY_BOUND = 4096
+_RATE_SWEEP_INTERVAL = 5.0
+
+
 class FixedWindowRateLimiter:
     """In-process fixed-window limiter keyed by client IP address.
 
@@ -93,6 +97,10 @@ class FixedWindowRateLimiter:
     API with a shared/external rate limiter or API gateway. Client IP is
     taken from the socket peer; ``X-Forwarded-For`` is intentionally NOT
     trusted (it is client-controlled).
+
+    Memory stays bounded: expired windows are swept periodically, and if
+    the tracked-client map still exceeds ``_RATE_MEMORY_BOUND`` entries the
+    oldest windows are evicted. Eviction never clears live windows.
     """
 
     def __init__(self, limit: int = 60, window_seconds: int = 60) -> None:
@@ -102,13 +110,29 @@ class FixedWindowRateLimiter:
         self.window_seconds = int(window_seconds)
         self._lock = threading.Lock()
         self._counts: Dict[str, Tuple[float, int]] = {}
+        self._last_sweep = time.monotonic()
+
+    def _sweep_expired(self, now: float) -> None:
+        stale = [
+            ip
+            for ip, (start, _count) in self._counts.items()
+            if now - start >= self.window_seconds
+        ]
+        for ip in stale:
+            del self._counts[ip]
+
+    def _trim_oldest(self) -> None:
+        while len(self._counts) > _RATE_MEMORY_BOUND:
+            oldest = min(self._counts.items(), key=lambda item: item[1][0])[0]
+            del self._counts[oldest]
 
     def allow(self, client_ip: str) -> Tuple[bool, int]:
         """Return (allowed, retry_after_seconds)."""
         now = time.monotonic()
         with self._lock:
-            if len(self._counts) > 4096:  # bound memory
-                self._counts.clear()
+            if now - self._last_sweep >= _RATE_SWEEP_INTERVAL:
+                self._last_sweep = now
+                self._sweep_expired(now)
             start, count = self._counts.get(client_ip, (now, 0))
             if now - start >= self.window_seconds:
                 start, count = now, 0
@@ -116,4 +140,6 @@ class FixedWindowRateLimiter:
                 retry_after = int(self.window_seconds - (now - start)) + 1
                 return False, max(1, retry_after)
             self._counts[client_ip] = (start, count + 1)
+            if len(self._counts) > _RATE_MEMORY_BOUND:
+                self._trim_oldest()
             return True, 0
