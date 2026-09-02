@@ -127,7 +127,9 @@ docker run -d --read-only --tmpfs /tmp \
   (live windows are never cleared).
 - No built-in TLS (loopback bind + reverse proxy required for any remote
   access).
-- No native log rotation (rotate externally).
+- When `GRIDSENTINEL_LOG_FILE` is set, in-app rotation is provided via
+  `RotatingFileHandler` (size-based, configurable). Without it, logs go to
+  stderr only and must be rotated externally.
 - The in-process concurrency cap is a first line of defense; a multi-worker
   deployment should still front the API with a gateway/rate limiter so the
   cap applies per worker, not globally.
