@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GridSentinel AI — Grid Risk Intelligence</title>
+<style>
+/* ============================================================
+   GridSentinel AI — Dashboard Shell (Phase H1)
+   Self-contained, zero-dependency, dark control-room aesthetic.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary:   #0b0f19;
+  --bg-secondary: #111827;
+  --bg-card:      #1a2236;
+  --bg-card-alt:  #151d2e;
+  --bg-inset:     #0d1321;
+  --border:       #1e2a3a;
+  --border-light: #263246;
+  --text-primary: #e8ecf1;
+  --text-secondary:#8896a7;
+  --text-muted:   #5a6a7d;
+  --accent:       #3b82f6;
+  --accent-dim:   #1e3a5f;
+  --green:        #22c55e;
+  --green-dim:    #064e3b;
+  --amber:        #f59e0b;
+  --amber-dim:    #78350f;
+  --red:          #ef4444;
+  --red-dim:      #7f1d1d;
+  --blue:         #60a5fa;
+  --cyan:         #22d3ee;
+  --radius:       8px;
+  --radius-lg:    12px;
+}
+
+html { font-size: 15px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.mono { font-family: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace; }
+
+/* ---- Layout ---- */
+.dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+
+/* ---- Header ---- */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.header-brand h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.header-brand .subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 0.8rem;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.status-dot.green { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+.status-dot.amber { background: var(--amber); }
+.status-dot.red   { background: var(--red); }
+
+.status-label { color: var(--text-secondary); }
+.status-value { color: var(--text-primary); font-weight: 500; }
+
+/* ---- Section headings ---- */
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  padding-left: 2px;
+}
+
+/* ---- Grid topology ---- */
+.topology {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.topology-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.topo-node {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 10px 28px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  position: relative;
+  z-index: 1;
+}
+
+.topo-node.source {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.topo-node.feeder {
+  background: var(--bg-card-alt);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.topo-node.asset {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+  min-width: 80px;
+  font-size: 0.85rem;
+}
+
+.topo-node.asset .asset-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.topo-connector {
+  width: 2px;
+  height: 18px;
+  background: var(--border-light);
+}
+
+.topo-connector.short { height: 12px; }
+
+.topo-branch {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.topo-branch-arm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.topo-branch-line {
+  width: 2px;
+  height: 14px;
+  background: var(--border-light);
+}
+
+.topo-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.topo-h-line {
+  height: 2px;
+  width: 40px;
+  background: var(--border-light);
+}
+
+.topo-h-corner {
+  width: 2px;
+  height: 14px;
+  background: var(--border-light);
+}
+
+/* ---- Asset cards ---- */
+.assets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 800px) {
+  .assets-grid { grid-template-columns: 1fr; }
+}
+
+.asset-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.asset-card:hover { border-color: var(--border-light); }
+
+.asset-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-id {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.asset-type {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.asset-meta {
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-meta span:last-child { color: var(--text-primary); font-weight: 500; }
+
+.asset-telemetry {
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+
+.telem-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telem-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.telem-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+}
+
+.telem-value.green { color: var(--green); }
+.telem-value.amber { color: var(--amber); }
+.telem-value.red   { color: var(--red); }
+
+.asset-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.asset-risk-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.risk-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.risk-badge.LOW      { background: var(--green-dim); color: var(--green); }
+.risk-badge.MEDIUM   { background: var(--amber-dim); color: var(--amber); }
+.risk-badge.HIGH     { background: #7c2d12; color: #fb923c; }
+.risk-badge.CRITICAL { background: var(--red-dim);   color: var(--red); }
+
+/* ---- Two-column layout ---- */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 800px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* ---- Panel ---- */
+.panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.panel-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- Risk Intelligence ---- */
+.risk-score-display {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.risk-gauge {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  flex-shrink: 0;
+}
+
+.risk-gauge.LOW      { background: var(--green-dim); color: var(--green); border: 2px solid var(--green); }
+.risk-gauge.MEDIUM   { background: var(--amber-dim); color: var(--amber); border: 2px solid var(--amber); }
+.risk-gauge.HIGH     { background: #7c2d12; color: #fb923c; border: 2px solid #fb923c; }
+.risk-gauge.CRITICAL { background: var(--red-dim);   color: var(--red); border: 2px solid var(--red); }
+
+.risk-details { flex: 1; }
+
+.risk-details .detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.risk-details .detail-row:last-child { border-bottom: none; }
+
+.detail-key { color: var(--text-secondary); }
+.detail-val { font-weight: 600; }
+
+/* ---- Telemetry overview ---- */
+.telemetry-overview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.gauge-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: center;
+}
+
+.gauge-card .gauge-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.gauge-card .gauge-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  color: var(--text-primary);
+}
+
+.gauge-card .gauge-unit {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.gauge-bar {
+  margin-top: 8px;
+  height: 4px;
+  background: var(--bg-inset);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.gauge-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.gauge-bar-fill.green  { background: var(--green); }
+.gauge-bar-fill.amber  { background: var(--amber); }
+.gauge-bar-fill.red    { background: var(--red); }
+.gauge-bar-fill.blue   { background: var(--accent); }
+
+/* ---- AI Decision Panel ---- */
+.ai-section { margin-bottom: 14px; }
+.ai-section:last-child { margin-bottom: 0; }
+
+.ai-section-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.ai-section-content {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.ai-section-content.placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.factor-list {
+  list-style: none;
+  padding: 0;
+}
+
+.factor-list li {
+  padding: 5px 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.factor-list li::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ---- Three-column for risk + telemetry + AI ---- */
+.three-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1000px) {
+  .three-col { grid-template-columns: 1fr; }
+}
+
+/* ---- Footer ---- */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 18px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.footer-brand {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.footer-brand strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.footer-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+/* ---- Status bar (top-level summary) ---- */
+.status-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 800px) {
+  .status-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+.status-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.status-card .sc-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.status-card .sc-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+}
+
+.status-card .sc-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ---- Utility ---- */
+.text-green  { color: var(--green); }
+.text-amber  { color: var(--amber); }
+.text-red    { color: var(--red); }
+.text-blue   { color: var(--accent); }
+.text-muted  { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.fw-600 { font-weight: 600; }
+.mt-4 { margin-top: 4px; }
+.mb-8 { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+
+  <!-- ============================================================
+       A. HEADER
+       ============================================================ -->
+  <header class="header">
+    <div class="header-brand">
+      <h1>GridSentinel AI</h1>
+      <span class="subtitle">Grid Risk Intelligence</span>
+    </div>
+    <div class="header-status">
+      <span>
+        <span class="status-dot green"></span>
+        <span class="status-label">System</span>
+        <span class="status-value">Operational</span>
+      </span>
+      <span>
+        <span class="status-dot green" id="api-dot"></span>
+        <span class="status-label">API</span>
+        <span class="status-value" id="api-status">Connected</span>
+      </span>
+      <span class="status-value mono" id="header-time" style="color:var(--text-muted)">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       B. STATUS BAR — top-level KPIs
+       ============================================================ -->
+  <div class="status-bar">
+    <div class="status-card">
+      <div class="sc-label">Assets Monitored</div>
+      <div class="sc-value text-blue">3</div>
+      <div class="sc-sub">33kV Distribution</div>
+    </div>
+    <div class="status-card">
+      <div class="sc-label">Grid Risk Level</div>
+      <div class="sc-value text-green" id="kpi-risk-level">LOW</div>
+      <div class="sc-sub" id="kpi-risk-score">Score: 12</div>
+    </div>
+    <div class="status-card">
+      <div class="sc-label">Active Alerts</div>
+      <div class="sc-value text-green" id="kpi-alerts">0</div>
+      <div class="sc-sub">No anomalies</div>
+    </div>
+    <div class="status-card">
+      <div class="sc-label">Uptime</div>
+      <div class="sc-value" id="kpi-uptime">100%</div>
+      <div class="sc-sub">All systems nominal</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       D. GRID TOPOLOGY
+       ============================================================ -->
+  <div class="section-title">Grid Topology</div>
+  <div class="topology">
+    <div class="topology-visual">
+
+      <!-- Source -->
+      <div class="topo-node source">33kV Distribution Bus</div>
+      <div class="topo-connector"></div>
+
+      <!-- Feeders -->
+      <div class="topo-node feeder">Distribution Feeders</div>
+      <div class="topo-connector short"></div>
+
+      <!-- Branch -->
+      <div class="topo-horizontal">
+        <div class="topo-h-corner"></div>
+        <div style="display:flex; flex-direction:column; align-items:center;">
+          <div class="topo-h-line" style="width:200px;"></div>
+        </div>
+        <div class="topo-h-corner"></div>
+      </div>
+
+      <div class="topo-branch">
+        <div class="topo-branch-arm">
+          <div class="topo-branch-line"></div>
+          <div class="topo-node asset">
+            T01
+            <div class="asset-label">40 MVA &middot; 6 yrs</div>
+          </div>
+        </div>
+        <div class="topo-branch-arm">
+          <div class="topo-branch-line"></div>
+          <div class="topo-node asset">
+            T02
+            <div class="asset-label">63 MVA &middot; 11 yrs</div>
+          </div>
+        </div>
+        <div class="topo-branch-arm">
+          <div class="topo-branch-line"></div>
+          <div class="topo-node asset">
+            T03
+            <div class="asset-label">40 MVA &middot; 17 yrs</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       C. ASSET CARDS
+       ============================================================ -->
+  <div class="section-title">Asset Monitoring</div>
+  <div class="assets-grid">
+
+    <!-- T01 -->
+    <div class="asset-card" id="card-t01">
+      <div class="asset-card-header">
+        <span class="asset-id">T01</span>
+        <span class="risk-badge LOW" id="badge-t01">LOW</span>
+      </div>
+      <div class="asset-meta">
+        <span>Type</span><span>Transformer &middot; 40 MVA</span>
+      </div>
+      <div class="asset-telemetry">
+        <div class="telem-item">
+          <span class="telem-label">Temperature</span>
+          <span class="telem-value" id="t01-temp">62.6 &deg;C</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Load</span>
+          <span class="telem-value" id="t01-load">66.9%</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Voltage</span>
+          <span class="telem-value" id="t01-volt">0.999 pu</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">THD</span>
+          <span class="telem-value" id="t01-thd">2.67%</span>
+        </div>
+      </div>
+      <div class="asset-footer">
+        <span class="asset-risk-label">Failure Prob.</span>
+        <span class="mono fw-600 text-green" id="t01-prob">0.031</span>
+      </div>
+    </div>
+
+    <!-- T02 -->
+    <div class="asset-card" id="card-t02">
+      <div class="asset-card-header">
+        <span class="asset-id">T02</span>
+        <span class="risk-badge LOW" id="badge-t02">LOW</span>
+      </div>
+      <div class="asset-meta">
+        <span>Type</span><span>Transformer &middot; 63 MVA</span>
+      </div>
+      <div class="asset-telemetry">
+        <div class="telem-item">
+          <span class="telem-label">Temperature</span>
+          <span class="telem-value" id="t02-temp">64.1 &deg;C</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Load</span>
+          <span class="telem-value" id="t02-load">72.6%</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Voltage</span>
+          <span class="telem-value" id="t02-volt">0.930 pu</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">THD</span>
+          <span class="telem-value" id="t02-thd">4.57%</span>
+        </div>
+      </div>
+      <div class="asset-footer">
+        <span class="asset-risk-label">Failure Prob.</span>
+        <span class="mono fw-600 text-green" id="t02-prob">0.036</span>
+      </div>
+    </div>
+
+    <!-- T03 -->
+    <div class="asset-card" id="card-t03">
+      <div class="asset-card-header">
+        <span class="asset-id">T03</span>
+        <span class="risk-badge LOW" id="badge-t03">LOW</span>
+      </div>
+      <div class="asset-meta">
+        <span>Type</span><span>Transformer &middot; 40 MVA</span>
+      </div>
+      <div class="asset-telemetry">
+        <div class="telem-item">
+          <span class="telem-label">Temperature</span>
+          <span class="telem-value" id="t03-temp">58.2 &deg;C</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Load</span>
+          <span class="telem-value" id="t03-load">61.4%</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">Voltage</span>
+          <span class="telem-value" id="t03-volt">1.002 pu</span>
+        </div>
+        <div class="telem-item">
+          <span class="telem-label">THD</span>
+          <span class="telem-value" id="t03-thd">2.11%</span>
+        </div>
+      </div>
+      <div class="asset-footer">
+        <span class="asset-risk-label">Failure Prob.</span>
+        <span class="mono fw-600 text-green" id="t03-prob">0.029</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       D+E. RISK INTELLIGENCE + TELEMETRY OVERVIEW (two-col)
+       ============================================================ -->
+  <div class="section-title">Risk Intelligence</div>
+  <div class="two-col">
+
+    <!-- Risk panel -->
+    <div class="panel">
+      <div class="panel-title">Grid Risk Assessment</div>
+      <div class="risk-score-display">
+        <div class="risk-gauge LOW" id="risk-gauge">12</div>
+        <div class="risk-details">
+          <div class="detail-row">
+            <span class="detail-key">Risk Level</span>
+            <span class="detail-val" id="risk-level-text">LOW</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Failure Probability</span>
+            <span class="detail-val mono" id="risk-prob">0.032</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">ML Score</span>
+            <span class="detail-val mono" id="risk-ml">1.92</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Operational Score</span>
+            <span class="detail-val mono" id="risk-op">10.08</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-key">Alert State</span>
+            <span class="detail-val text-green" id="risk-alert">NORMAL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry overview -->
+    <div class="panel">
+      <div class="panel-title">Telemetry Overview</div>
+      <div class="telemetry-overview">
+        <div class="gauge-card">
+          <div class="gauge-label">Avg Temperature</div>
+          <div class="gauge-value" id="ov-temp">61.6</div>
+          <div class="gauge-unit">&deg;C</div>
+          <div class="gauge-bar"><div class="gauge-bar-fill green" id="bar-temp" style="width:35%"></div></div>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-label">Avg Load</div>
+          <div class="gauge-value" id="ov-load">67.0</div>
+          <div class="gauge-unit">%</div>
+          <div class="gauge-bar"><div class="gauge-bar-fill green" id="bar-load" style="width:52%"></div></div>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-label">Avg Voltage</div>
+          <div class="gauge-value" id="ov-volt">0.977</div>
+          <div class="gauge-unit">pu</div>
+          <div class="gauge-bar"><div class="gauge-bar-fill blue" id="bar-volt" style="width:82%"></div></div>
+        </div>
+        <div class="gauge-card">
+          <div class="gauge-label">Avg THD</div>
+          <div class="gauge-value" id="ov-thd">3.12</div>
+          <div class="gauge-unit">%</div>
+          <div class="gauge-bar"><div class="gauge-bar-fill green" id="bar-thd" style="width:21%"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
+       F. AI DECISION PANEL
+       ============================================================ -->
+  <div class="section-title">AI Decision Intelligence</div>
+  <div class="panel" style="margin-bottom:24px;">
+    <div class="panel-title">V2.1 Risk Engine &mdash; Explainability</div>
+    <div class="three-col">
+
+      <div class="ai-section">
+        <div class="ai-section-label">Risk Assessment</div>
+        <div class="ai-section-content">
+          <p>Hybrid ML + physics engine combining <strong>FailurePredictorV2</strong> (neural network, 60% weight) with an operational risk calculator (8 physical dimensions, 40% weight). Safety Guard V2.1 provides a final protective overlay.</p>
+          <p class="mt-4 text-muted" style="font-size:0.78rem;">Threshold: 0.70 &middot; Model recall: 97.8% &middot; F1: 94.0%</p>
+        </div>
+      </div>
+
+      <div class="ai-section">
+        <div class="ai-section-label">Top Contributing Factors</div>
+        <div class="ai-section-content">
+          <ul class="factor-list" id="factor-list">
+            <li>Electrical stress index</li>
+            <li>Temperature excess above baseline</li>
+            <li>Asset age and criticality</li>
+            <li>Harmonic distortion level</li>
+            <li>Historical fault count</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="ai-section">
+        <div class="ai-section-label">Recommended Action</div>
+        <div class="ai-section-content" id="rec-action">
+          Continue normal operation with routine monitoring.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       G. FOOTER
+       ============================================================ -->
+  <footer class="footer">
+    <div class="footer-brand">
+      <strong>GridSentinel AI</strong> &mdash; AI-powered grid risk intelligence
+    </div>
+    <div class="footer-tag">Saudi Energy Hackathon 2026</div>
+    <div class="footer-tag" id="footer-status">System Operational</div>
+  </footer>
+
+</div>
+
+<!-- ============================================================
+     Minimal JS — timestamp, no dependencies.
+     H2/H3 will connect this to the live API.
+     ============================================================ -->
+<script>
+(function () {
+  "use strict";
+
+  /* ---- Live clock ---- */
+  function updateClock() {
+    var el = document.getElementById("header-time");
+    if (!el) return;
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, "0");
+    var m = String(now.getMinutes()).padStart(2, "0");
+    var s = String(now.getSeconds()).padStart(2, "0");
+    el.textContent = h + ":" + m + ":" + s;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+})();
+</script>
+
+</body>
+</html>
