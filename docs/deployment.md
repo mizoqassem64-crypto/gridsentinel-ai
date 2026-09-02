@@ -7,15 +7,15 @@ read-only `models/` bundle and the process-local rate limiter.
 ## Invariants this deployment must preserve
 
 1. Model artifacts are never statically served. The API exposes only
-   `GET /health` and `POST /v1/assess`.
+   `GET /health`, `GET /health/ready`, and `POST /v1/assess`.
 2. `trusted_source` is always `False` at the server boundary. Clients can
    never set it (rejected with 422).
 3. `models/` is read-only at runtime. The engine's manifest verification is
    fail-closed: an altered/unverifiable bundle makes inference fail with 500,
    never silently degrade.
-4. The API key is environment-only. It is never logged, echoed, or shipped in
-   the repo. Rotate by restarting the process with a new
-   `GRIDSENTINEL_API_KEY`.
+4. The API key is environment-only (or file). It is never logged, echoed, or
+   shipped in the repo. Rotate by updating the key set and reloading; or
+   restart the process with a new `GRIDSENTINEL_API_KEY`.
 5. The ML artifacts (`models/`, `datasets/`, `ai/ml/`) are never modified at
    runtime.
 
@@ -25,15 +25,21 @@ Environment-only. No config file is read.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GRIDSENTINEL_API_KEY` | *(required)* | Key checked against the `X-API-Key` header. Unconfigured `POST /v1/assess` fails closed with 503. |
+| `GRIDSENTINEL_API_KEY` | *(required)* | Comma-separated keys checked against the `X-API-Key` header. Unconfigured `POST /v1/assess` fails closed with 503. |
+| `GRIDSENTINEL_API_KEY_FILE` | *(optional)* | Path to a file containing one key per line (union with `GRIDSENTINEL_API_KEY`). |
 | `GRIDSENTINEL_HOST` | `127.0.0.1` | Bind address. Keep loopback unless a TLS reverse proxy is in front. |
 | `GRIDSENTINEL_PORT` | `8000` | Bind port. |
 | `GRIDSENTINEL_MAX_BODY_BYTES` | `65536` | Maximum accepted request body. |
 | `GRIDSENTINEL_RATE_LIMIT_REQUESTS` | `60` | Fixed-window request budget per client IP (in-process, per worker). |
 | `GRIDSENTINEL_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window. |
-| `GRIDSENTINEL_SOCKET_TIMEOUT` | `10.0` | Per-connection socket timeout (seconds) on request handlers. A stalled/slow client is disconnected after this; bounds slowloris and shutdown-drain time. |
-| `GRIDSENTINEL_MAX_CONCURRENT` | `32` | Max in-flight handler threads. Connections beyond the cap receive an immediate `503 server_overloaded` response (no thread is spawned). |
+| `GRIDSENTINEL_GLOBAL_RATE_LIMIT_REQUESTS` | `0` (disabled) | Optional global process-wide request cap across all IPs. |
+| `GRIDSENTINEL_GLOBAL_RATE_WINDOW_SECONDS` | `60` | Global rate-limit window. |
+| `GRIDSENTINEL_SOCKET_TIMEOUT` | `10.0` | Per-connection socket timeout (seconds) on request handlers. |
+| `GRIDSENTINEL_MAX_CONCURRENT` | `32` | Max in-flight handler threads. Connections beyond the cap receive an immediate `503 server_overloaded`. |
 | `GRIDSENTINEL_LOG_LEVEL` | `INFO` | Structured JSON log level (stderr). |
+| `GRIDSENTINEL_LOG_FILE` | *(optional)* | Path to a log file. Enables `RotatingFileHandler` with size-based rotation. |
+| `GRIDSENTINEL_LOG_MAX_BYTES` | `10485760` | Max log file size before rotation (bytes). |
+| `GRIDSENTINEL_LOG_BACKUP_COUNT` | `5` | Number of rotated log files to keep. |
 
 Request lines longer than 4096 bytes are rejected with `414`; the standard
 library additionally bounds header lines (~64 KiB) and header count (100).

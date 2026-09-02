@@ -17,6 +17,8 @@ from . import errors as err
 from . import schemas
 from .auth import (
     API_KEY_HEADER,
+    _get_keys,
+    first_key_principal,
     hashed_principal,
     is_configured,
     verify as verify_api_key,
@@ -47,6 +49,10 @@ _ENGINE_LOCK = threading.Lock()
 _DEFAULT_SOCKET_TIMEOUT = 10.0
 _DEFAULT_MAX_CONCURRENT = 32
 _MAX_REQUEST_LINE = 4096
+
+_READY_STATE_UNKNOWN = "unknown"
+_READY_STATE_READY = "ready"
+_READY_STATE_NOT_READY = "not_ready"
 
 
 def _get_engine():
@@ -144,7 +150,7 @@ class GridSentinelServer(ThreadingHTTPServer):
                 "correlation_id": request_id,
                 "status": 503,
                 "client_ip_hash": client_ip_hash(client_address[0]),
-                "principal": hashed_principal(),
+                "principal": first_key_principal(),
                 "error_category": api.code,
             }
         )
@@ -198,6 +204,7 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
 
     def _log_record(self, *, status: int, error_category: str = "",
                     duration_ms: float = 0.0) -> None:
+        api_key = self.headers.get(API_KEY_HEADER, "")
         log_event(
             {
                 "ts": time.time(),
@@ -206,7 +213,7 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "status": status,
                 "duration_ms": round(duration_ms * 1000.0, 2),
                 "client_ip_hash": client_ip_hash(self.client_address[0]),
-                "principal": hashed_principal(),
+                "principal": hashed_principal(api_key),
                 "error_category": error_category,
                 "bytes": getattr(self, "_bytes_read", 0),
             }
@@ -219,6 +226,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
         self._bytes_read = 0
         if self.path == "/health":
             self._health()
+        elif self.path == "/health/ready":
+            self._ready()
         else:
             self._fail(err.not_found())
 
@@ -262,6 +271,38 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
         payload = {"status": "ok", "service": SERVICE_NAME, "api_version": API_VERSION}
         self._write_json(200, payload)
         self._log_record(status=200, duration_ms=time.monotonic() - started)
+
+    def _ready(self) -> None:
+        started = time.monotonic()
+        state = getattr(self.server, "ready_state", _READY_STATE_UNKNOWN)
+        if state == _READY_STATE_READY or state == _READY_STATE_UNKNOWN:
+            payload = {
+                "status": "ok",
+                "service": SERVICE_NAME,
+                "api_version": API_VERSION,
+                "ready": True,
+                "engine_state": state,
+            }
+            self._write_json(200, payload)
+            self._log_record(status=200, duration_ms=time.monotonic() - started)
+        else:
+            payload = {
+                "status": "error",
+                "service": SERVICE_NAME,
+                "api_version": API_VERSION,
+                "ready": False,
+                "engine_state": state,
+                "error": {
+                    "code": "not_ready",
+                    "message": "Engine initialization failed. Restart required.",
+                },
+            }
+            self._write_json(503, payload)
+            self._log_record(
+                status=503,
+                error_category="not_ready",
+                duration_ms=time.monotonic() - started,
+            )
 
     # -- assessment --------------------------------------------------------
 
@@ -310,12 +351,18 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             if not verify_api_key(self.headers.get(API_KEY_HEADER, "")):
                 raise err.unauthorized()
 
-            # ---- rate limiting (after auth, before inference) ----------
+            # ---- rate limiting: per-IP then global (after auth) --------
             allowed, retry_after = self.server.limiter.allow(
                 self.client_address[0]
             )
             if not allowed:
                 raise err.rate_limited(retry_after)
+
+            global_limiter = getattr(self.server, "global_limiter", None)
+            if global_limiter is not None:
+                g_allowed, g_retry_after = global_limiter.allow("global")
+                if not g_allowed:
+                    raise err.rate_limited(g_retry_after)
 
             # ---- strict schema validation --------------------------------
             try:
@@ -425,11 +472,23 @@ def create_server(host: str = "127.0.0.1", port: int = 0) -> GridSentinelServer:
     max_concurrent = _require_int(
         "GRIDSENTINEL_MAX_CONCURRENT", _DEFAULT_MAX_CONCURRENT, 1
     )
+    global_limit = int(
+        os.environ.get("GRIDSENTINEL_GLOBAL_RATE_LIMIT_REQUESTS", "0")
+    )
+    global_window = int(
+        os.environ.get("GRIDSENTINEL_GLOBAL_RATE_WINDOW_SECONDS", "60")
+    )
     httpd = GridSentinelServer((host, port), GridSentinelHandler)
     httpd.limiter = FixedWindowRateLimiter(limit=limit, window_seconds=window)
+    httpd.global_limiter = (
+        FixedWindowRateLimiter(limit=global_limit, window_seconds=global_window)
+        if global_limit > 0
+        else None
+    )
     httpd.socket_timeout = socket_timeout
     httpd.request_line_limit = _MAX_REQUEST_LINE
     httpd.concurrency_guard = threading.Semaphore(max_concurrent)
+    httpd.ready_state = _READY_STATE_UNKNOWN
     return httpd
 
 
@@ -449,6 +508,12 @@ def main(argv=None) -> None:
         logging.getLogger("gridsentinel.api").warning(
             "GRIDSENTINEL_API_KEY is not set: /v1/assess will fail closed "
             "with 503. The key is never read from client input."
+        )
+    else:
+        logging.getLogger("gridsentinel.api").info(
+            "principal=%s keys=%d",
+            first_key_principal(),
+            len(_get_keys()),
         )
 
     httpd = create_server(args.host, args.port)

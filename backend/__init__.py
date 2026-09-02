@@ -43,8 +43,9 @@ Run (from the repository root):
         python3 -m backend.server --host 127.0.0.1 --port 8000
 
 Endpoints:
-    GET  /health    -> service liveness (no model/artifact disclosure)
-    POST /v1/assess -> authenticated, strictly validated risk assessment
+    GET  /health      -> service liveness (no model/artifact disclosure)
+    GET  /health/ready -> deployment readiness (engine state; 503 if failed)
+    POST /v1/assess   -> authenticated, strictly validated risk assessment
 """
 
 API_VERSION = "1.0"

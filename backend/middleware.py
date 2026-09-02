@@ -15,6 +15,7 @@ provide out of the box:
 import hashlib
 import json
 import logging
+import logging.handlers
 import os
 import re
 import threading
@@ -48,19 +49,50 @@ _LOG_KEYS = (
 
 
 def configure_logging() -> None:
-    """Attach a single JSON-line handler to the module logger."""
+    """Attach a JSON-line handler to the module logger.
+
+    A stream handler (stderr) is always present.  When
+    ``GRIDSENTINEL_LOG_FILE`` is set, a ``RotatingFileHandler`` is added
+    with size-based rotation controlled by
+    ``GRIDSENTINEL_LOG_MAX_BYTES`` (default 10 MiB) and
+    ``GRIDSENTINEL_LOG_BACKUP_COUNT`` (default 5).
+    """
     if _logger.handlers:
         return
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s gridsentinel.api %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s gridsentinel.api %(message)s"
     )
-    _logger.addHandler(handler)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    _logger.addHandler(stream_handler)
     try:
         _logger.setLevel(os.environ.get("GRIDSENTINEL_LOG_LEVEL", "INFO").upper())
     except ValueError:
         _logger.setLevel(logging.INFO)
     _logger.propagate = False
+
+    log_file = os.environ.get("GRIDSENTINEL_LOG_FILE", "").strip()
+    if log_file:
+        max_bytes = int(
+            os.environ.get("GRIDSENTINEL_LOG_MAX_BYTES", "10485760")
+        )
+        backup_count = int(
+            os.environ.get("GRIDSENTINEL_LOG_BACKUP_COUNT", "5")
+        )
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_file,
+                maxBytes=max(1024, max_bytes),
+                backupCount=max(0, backup_count),
+            )
+            # The file is meant for machine ingestion, so each record is a
+            # standalone JSON line (message only, no human prefix).
+            file_handler.setFormatter(
+                logging.Formatter("%(message)s")
+            )
+            _logger.addHandler(file_handler)
+        except OSError:
+            _logger.error("failed to open log file: %s", log_file)
 
 
 def log_event(event: Dict) -> None:
