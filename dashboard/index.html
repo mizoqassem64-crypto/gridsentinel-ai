@@ -638,6 +638,185 @@ body {
 .state-initial .mono {
   color: var(--text-muted) !important;
 }
+
+/* ---- Simulation panel (H3) ---- */
+.sim-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.sim-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sim-field { display: flex; flex-direction: column; gap: 4px; }
+
+.sim-field label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sim-field select,
+.sim-field input[type="range"] {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  min-width: 110px;
+  outline: none;
+}
+
+.sim-field select:focus,
+.sim-field input:focus {
+  border-color: var(--accent);
+}
+
+.sim-severity-val {
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 36px;
+  text-align: right;
+}
+
+.sim-severity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim-field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--bg-inset);
+  border: none;
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sim-field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.sim-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.sim-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sim-btn-inject {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.sim-btn-inject:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.sim-btn-ramp {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sim-btn-ramp:hover:not(:disabled) {
+  background: #1e40af;
+  color: #fff;
+}
+
+.sim-btn-reset {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+
+.sim-btn-reset:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.sim-btn-stop {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.sim-btn-stop:hover:not(:disabled) {
+  background: var(--red);
+  color: #fff;
+}
+
+.sim-active {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: none;
+}
+
+.sim-active.visible { display: block; }
+
+.sim-active-detail {
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-size: 0.78rem;
+}
+
+.asset-card.sim-active-card {
+  border-color: var(--red) !important;
+}
+
+.asset-card.sim-active-card .asset-card-header {
+  background: var(--red-dim);
+}
+
+.asset-sim-tag {
+  font-size: 0.62rem;
+  color: var(--red);
+  background: var(--red-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 6px;
+}
 </style>
 </head>
 <body class="state-initial">
@@ -750,7 +929,49 @@ body {
   </div>
 
   <!-- ============================================================
-       C. ASSET CARDS
+       C. FAULT INJECTION / SIMULATION PANEL
+       ============================================================ -->
+  <div class="section-title">Fault Injection / Simulation</div>
+  <div class="sim-panel">
+    <div class="sim-form">
+      <div class="sim-field">
+        <label for="sim-asset">Asset</label>
+        <select id="sim-asset">
+          <option value="T01">T01</option>
+          <option value="T02">T02</option>
+          <option value="T03">T03</option>
+        </select>
+      </div>
+      <div class="sim-field">
+        <label for="sim-fault">Fault Type</label>
+        <select id="sim-fault">
+          <option value="overload">Overload</option>
+          <option value="overheating">Overheating</option>
+          <option value="voltage_instability">Voltage Instability</option>
+          <option value="harmonic_distortion">Harmonic Distortion</option>
+        </select>
+      </div>
+      <div class="sim-field" style="min-width:200px;">
+        <label for="sim-severity">Severity</label>
+        <div class="sim-severity-row">
+          <input type="range" id="sim-severity" min="0" max="100" value="50" step="1">
+          <span class="sim-severity-val" id="sim-severity-val">50%</span>
+        </div>
+      </div>
+      <button class="sim-btn sim-btn-inject" id="sim-inject-btn">Inject Fault</button>
+      <button class="sim-btn sim-btn-ramp" id="sim-ramp-btn">Severity Ramp</button>
+      <button class="sim-btn sim-btn-reset" id="sim-reset-asset-btn">Reset Asset</button>
+      <button class="sim-btn sim-btn-reset" id="sim-reset-grid-btn">Reset Grid</button>
+    </div>
+    <div class="sim-active" id="sim-active">
+      <span id="sim-active-text">ACTIVE SIMULATION</span>
+      <div class="sim-active-detail" id="sim-active-detail"></div>
+      <button class="sim-btn sim-btn-stop" id="sim-stop-btn" style="margin-top:8px;">Stop Simulation</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       D. ASSET CARDS
        ============================================================ -->
   <div class="section-title">Asset Monitoring</div>
   <div class="assets-grid">
@@ -978,7 +1199,7 @@ body {
 </div>
 
 <!-- ============================================================
-     GridSentinel AI — Dashboard H2: Live Telemetry + Risk Display
+     GridSentinel AI — Dashboard H2+H3: Live Telemetry + Risk + Simulation
      Connects to existing backend API. Zero external dependencies.
      ============================================================ -->
 <script>
@@ -993,6 +1214,7 @@ body {
   var API_KEY   = "gridsentinel-demo-key";
   var HEALTH_INTERVAL_MS  = 10000;
   var ASSESS_INTERVAL_MS  = 15000;
+  var SIM_POLL_MS          = 10000;
   var FETCH_TIMEOUT_MS    = 8000;
 
   // ==============================================================
@@ -1034,7 +1256,13 @@ body {
   };
 
   var ASSET_IDS = ["T01", "T02", "T03"];
-  var ASSESS_IDS = ASSET_IDS;
+
+  var FAULT_LABELS = {
+    overload: "Overload",
+    overheating: "Overheating",
+    voltage_instability: "Voltage Instability",
+    harmonic_distortion: "Harmonic Distortion"
+  };
 
   // ==============================================================
   // STATE
@@ -1045,7 +1273,17 @@ body {
     firstAssessDone: false,
     assessments: {},
     gridWorst: "LOW",
-    gridAlertCount: 0
+    gridAlertCount: 0,
+    sim: {
+      active: false,
+      assetId: null,
+      faultType: null,
+      severity: 0
+    },
+    rampTimer: null,
+    rampSteps: [],
+    rampStepIndex: 0,
+    simulateAvailable: null
   };
 
   // ==============================================================
@@ -1169,7 +1407,7 @@ body {
   }
 
   function runAssessments() {
-    var promises = ASSESS_IDS.map(assessAsset);
+    var promises = ASSET_IDS.map(assessAsset);
     Promise.all(promises).then(function (results) {
       var anySuccess = false;
       var worst = "LOW";
@@ -1209,6 +1447,214 @@ body {
   }
 
   // ==============================================================
+  // SIMULATION
+  // ==============================================================
+
+  function simulateAsset(assetId, faultType, severity) {
+    return apiFetch("POST", "/v1/simulate", {
+      asset_id: assetId,
+      fault_type: faultType,
+      severity: severity
+    }).then(function (env) {
+      return { ok: true, data: env };
+    }).catch(function (err) {
+      return { ok: false, error: err };
+    });
+  }
+
+  function doInject() {
+    var assetId   = document.getElementById("sim-asset").value;
+    var faultType = document.getElementById("sim-fault").value;
+    var severityVal = parseInt(document.getElementById("sim-severity").value, 10);
+    var severity  = clamp(severityVal / 100, 0, 1);
+
+    if (state.rampTimer) stopRamp();
+
+    simulateAsset(assetId, faultType, severity).then(function (r) {
+      if (!r.ok) {
+        showSimError("Simulation failed: " + (r.error ? r.error.message : "unknown"));
+        return;
+      }
+      setSimActive(assetId, faultType, severity);
+      applySimResult(assetId, r.data);
+    });
+  }
+
+  function doResetAsset() {
+    if (state.rampTimer) stopRamp();
+    var assetId = document.getElementById("sim-asset").value;
+    clearSimAsset(assetId);
+    document.getElementById("sim-active").classList.remove("visible");
+    assessAsset(assetId).then(function (r) {
+      if (!r.ok) return;
+      var res = r.data.result || {};
+      state.assessments[assetId] = res;
+      updateAssetCard(assetId, res);
+      updateGridOverview();
+      updateRiskPanel();
+      updateTelemetryOverview();
+      updateAIDecisionPanel();
+    });
+  }
+
+  function doResetGrid() {
+    if (state.rampTimer) stopRamp();
+    ASSET_IDS.forEach(function (id) { clearSimAsset(id); });
+    document.getElementById("sim-active").classList.remove("visible");
+    runAssessments();
+  }
+
+  function doStopSim() {
+    if (state.rampTimer) stopRamp();
+    ASSET_IDS.forEach(function (id) { clearSimAsset(id); });
+    document.getElementById("sim-active").classList.remove("visible");
+    runAssessments();
+  }
+
+  function doRamp() {
+    if (state.rampTimer) stopRamp();
+
+    var assetId   = document.getElementById("sim-asset").value;
+    var faultType = document.getElementById("sim-fault").value;
+
+    var steps = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+    state.rampSteps = steps;
+    state.rampStepIndex = 0;
+
+    setSimActive(assetId, faultType, 0);
+    rampStep();
+  }
+
+  function rampStep() {
+    if (state.rampStepIndex >= state.rampSteps.length) {
+      stopRamp();
+      return;
+    }
+
+    var sevPct = state.rampSteps[state.rampStepIndex];
+    var severity = clamp(sevPct / 100, 0, 1);
+    var assetId   = state.sim.assetId;
+    var faultType = state.sim.faultType;
+
+    document.getElementById("sim-severity").value = sevPct;
+    document.getElementById("sim-severity-val").textContent = sevPct + "%";
+    var detailEl = document.getElementById("sim-active-detail");
+    if (detailEl) {
+      detailEl.textContent = "Step " + (state.rampStepIndex + 1) +
+        " of " + state.rampSteps.length + " — Severity: " + sevPct + "%";
+    }
+
+    simulateAsset(assetId, faultType, severity).then(function (r) {
+      if (!r.ok) {
+        showSimError("Ramp failed at severity " + sevPct + "%: " +
+          (r.error ? r.error.message : "unknown"));
+        stopRamp();
+        return;
+      }
+      setSimActive(assetId, faultType, severity);
+      applySimResult(assetId, r.data);
+      state.rampStepIndex++;
+      state.rampTimer = setTimeout(rampStep, 1500);
+    });
+  }
+
+  function stopRamp() {
+    if (state.rampTimer) {
+      clearTimeout(state.rampTimer);
+      state.rampTimer = null;
+    }
+    state.rampSteps = [];
+    state.rampStepIndex = 0;
+  }
+
+  // ==============================================================
+  // SIMULATION STATE + UI
+  // ==============================================================
+
+  function setSimActive(assetId, faultType, severity) {
+    state.sim.active = true;
+    state.sim.assetId = assetId;
+    state.sim.faultType = faultType;
+    state.sim.severity = severity;
+
+    var el = document.getElementById("sim-active");
+    if (el) el.classList.add("visible");
+    var txt = document.getElementById("sim-active-text");
+    if (txt) txt.textContent = "ACTIVE SIMULATION — " + assetId;
+    var detail = document.getElementById("sim-active-detail");
+    if (detail) {
+      detail.textContent = FAULT_LABELS[faultType] + " at " +
+        Math.round(severity * 100) + "% severity";
+    }
+
+    ASSET_IDS.forEach(function (id) {
+      var card = document.getElementById("card-" + id.toLowerCase());
+      if (card) {
+        if (id === assetId) {
+          card.classList.add("sim-active-card");
+        } else {
+          card.classList.remove("sim-active-card");
+        }
+      }
+    });
+
+    var badge = document.getElementById("badge-" + assetId.toLowerCase());
+    if (badge) {
+      var tag = badge.querySelector(".asset-sim-tag");
+      if (!tag) {
+        tag = document.createElement("span");
+        tag.className = "asset-sim-tag";
+        tag.textContent = "SIM";
+        badge.appendChild(tag);
+      }
+    }
+  }
+
+  function clearSimAsset(assetId) {
+    ASSET_IDS.forEach(function (id) {
+      if (id !== assetId && !state.sim.active) return;
+      var card = document.getElementById("card-" + id.toLowerCase());
+      if (card) card.classList.remove("sim-active-card");
+      var badge = document.getElementById("badge-" + id.toLowerCase());
+      if (badge) {
+        var tag = badge.querySelector(".asset-sim-tag");
+        if (tag) tag.remove();
+      }
+    });
+
+    if (assetId === state.sim.assetId) {
+      state.sim.active = false;
+      state.sim.assetId = null;
+      state.sim.faultType = null;
+      state.sim.severity = 0;
+    }
+  }
+
+  function applySimResult(assetId, env) {
+    var res = env.result || {};
+    var sim = env.simulation || {};
+    var simTelem = sim.simulated_telemetry || {};
+
+    state.assessments[assetId] = res;
+
+    updateAssetCardFromSim(assetId, res, simTelem);
+    updateGridOverview();
+    updateRiskPanel();
+    updateTelemetryOverviewFromSim();
+    updateAIDecisionPanel();
+  }
+
+  function showSimError(msg) {
+    var el = document.getElementById("sim-active");
+    if (el) el.classList.add("visible");
+    var detail = document.getElementById("sim-active-detail");
+    if (detail) {
+      detail.textContent = msg;
+      detail.style.color = "var(--red)";
+    }
+  }
+
+  // ==============================================================
   // UI UPDATES
   // ==============================================================
 
@@ -1218,15 +1664,79 @@ body {
     var color = riskColor(rc);
     var prob = res.failure_probability;
 
-    // Badge
     var badge = document.getElementById("badge-" + prefix);
     if (badge) {
       badge.textContent = rc;
       badge.className = "risk-badge " + rc;
+      if (state.sim.active && state.sim.assetId === id) {
+        var tag = document.createElement("span");
+        tag.className = "asset-sim-tag";
+        tag.textContent = "SIM";
+        badge.appendChild(tag);
+      }
     }
 
-    // Telemetry values — use the input telemetry for display
     var t = TELEMETRY[id];
+    updateTelemDisplay(prefix, t, rc);
+
+    var probEl = document.getElementById(prefix + "-prob");
+    if (probEl) {
+      probEl.textContent = prob != null ? prob.toFixed(3) : "--";
+      probEl.className = "mono fw-600 text-" + color;
+    }
+
+    var card = document.getElementById("card-" + prefix);
+    if (card) {
+      if (rc === "CRITICAL") card.style.borderColor = "var(--red)";
+      else if (rc === "HIGH") card.style.borderColor = "#fb923c";
+      else card.style.borderColor = "";
+    }
+  }
+
+  function updateAssetCardFromSim(id, res, simTelem) {
+    var prefix = id.toLowerCase();
+    var rc = res.risk_classification || "LOW";
+    var color = riskColor(rc);
+    var prob = res.failure_probability;
+
+    var badge = document.getElementById("badge-" + prefix);
+    if (badge) {
+      badge.textContent = rc;
+      badge.className = "risk-badge " + rc;
+      var tag = document.createElement("span");
+      tag.className = "asset-sim-tag";
+      tag.textContent = "SIM";
+      badge.appendChild(tag);
+    }
+
+    var t = {};
+    if (simTelem.temperature_c != null) t.temperature_c = simTelem.temperature_c;
+    else t.temperature_c = TELEMETRY[id].temperature_c;
+    if (simTelem.load_percent != null) t.load_percent = simTelem.load_percent;
+    else t.load_percent = TELEMETRY[id].load_percent;
+    if (simTelem.voltage_pu != null) t.voltage_pu = simTelem.voltage_pu;
+    else t.voltage_pu = TELEMETRY[id].voltage_pu;
+    if (simTelem.thd_percent != null) t.thd_percent = simTelem.thd_percent;
+    else t.thd_percent = TELEMETRY[id].thd_percent;
+
+    updateTelemDisplay(prefix, t, rc);
+
+    var probEl = document.getElementById(prefix + "-prob");
+    if (probEl) {
+      probEl.textContent = prob != null ? prob.toFixed(3) : "--";
+      probEl.className = "mono fw-600 text-" + color;
+    }
+
+    var card = document.getElementById("card-" + prefix);
+    if (card) {
+      card.classList.add("sim-active-card");
+      if (rc === "CRITICAL") card.style.borderColor = "var(--red)";
+      else if (rc === "HIGH") card.style.borderColor = "#fb923c";
+      else card.style.borderColor = "";
+    }
+  }
+
+  function updateTelemDisplay(prefix, t, rc) {
     var tempEl = document.getElementById(prefix + "-temp");
     var loadEl = document.getElementById(prefix + "-load");
     var voltEl = document.getElementById(prefix + "-volt");
@@ -1249,25 +1759,6 @@ body {
       thdEl.textContent = t.thd_percent.toFixed(2) + "%";
       thdEl.className = "telem-value " + (t.thd_percent >= 10 ? "red" : t.thd_percent >= 5 ? "amber" : "");
     }
-
-    // Failure probability
-    var probEl = document.getElementById(prefix + "-prob");
-    if (probEl) {
-      probEl.textContent = prob != null ? prob.toFixed(3) : "--";
-      probEl.className = "mono fw-600 text-" + color;
-    }
-
-    // Card border highlight for critical/high
-    var card = document.getElementById("card-" + prefix);
-    if (card) {
-      if (rc === "CRITICAL") {
-        card.style.borderColor = "var(--red)";
-      } else if (rc === "HIGH") {
-        card.style.borderColor = "#fb923c";
-      } else {
-        card.style.borderColor = "";
-      }
-    }
   }
 
   function updateGridOverview() {
@@ -1281,9 +1772,8 @@ body {
       kpiLevel.className = "sc-value text-" + riskColor(state.gridWorst);
     }
     if (kpiScore) {
-      // Show the highest individual risk score
       var maxScore = 0;
-      ASSESS_IDS.forEach(function (id) {
+      ASSET_IDS.forEach(function (id) {
         var r = state.assessments[id];
         if (r && r.risk_score > maxScore) maxScore = r.risk_score;
       });
@@ -1301,10 +1791,9 @@ body {
   }
 
   function updateRiskPanel() {
-    // Use the worst asset for the grid risk panel
     var worstId = null;
     var worstLevel = "LOW";
-    ASSESS_IDS.forEach(function (id) {
+    ASSET_IDS.forEach(function (id) {
       var r = state.assessments[id];
       if (!r) return;
       var rc = r.risk_classification || "LOW";
@@ -1332,8 +1821,6 @@ body {
     if (levelText) levelText.textContent = worstLevel;
     if (probText) probText.textContent =
       res.failure_probability != null ? res.failure_probability.toFixed(3) : "--";
-    // ml_score and operational_score are not in the API envelope.
-    // Derive from the engine's weighting: ml=prob*60, op=risk-ml.
     var prob = res.failure_probability || 0;
     var score = res.risk_score || 0;
     var derivedMl = prob * 60;
@@ -1352,11 +1839,10 @@ body {
   }
 
   function updateTelemetryOverview() {
-    // Average across all assets
     var sumTemp = 0, sumLoad = 0, sumVolt = 0, sumThd = 0;
     var count = 0;
 
-    ASSESS_IDS.forEach(function (id) {
+    ASSET_IDS.forEach(function (id) {
       var t = TELEMETRY[id];
       sumTemp += t.temperature_c;
       sumLoad += t.load_percent;
@@ -1366,12 +1852,43 @@ body {
     });
 
     if (count === 0) return;
+    updateTelemOverviewUI(sumTemp / count, sumLoad / count, sumVolt / count, sumThd / count);
+  }
 
-    var avgTemp = sumTemp / count;
-    var avgLoad = sumLoad / count;
-    var avgVolt = sumVolt / count;
-    var avgThd  = sumThd  / count;
+  function updateTelemetryOverviewFromSim() {
+    var sumTemp = 0, sumLoad = 0, sumVolt = 0, sumThd = 0;
+    var count = 0;
 
+    ASSET_IDS.forEach(function (id) {
+      var t = TELEMETRY[id];
+      var sim = state.sim.active && state.sim.assetId === id;
+      if (sim) {
+        var r = state.assessments[id];
+        if (r && r.simulated_telemetry) {
+          sumTemp += r.simulated_telemetry.temperature_c || t.temperature_c;
+          sumLoad += r.simulated_telemetry.load_percent || t.load_percent;
+          sumVolt += r.simulated_telemetry.voltage_pu || t.voltage_pu;
+          sumThd  += r.simulated_telemetry.thd_percent || t.thd_percent;
+        } else {
+          sumTemp += t.temperature_c;
+          sumLoad += t.load_percent;
+          sumVolt += t.voltage_pu;
+          sumThd  += t.thd_percent;
+        }
+      } else {
+        sumTemp += t.temperature_c;
+        sumLoad += t.load_percent;
+        sumVolt += t.voltage_pu;
+        sumThd  += t.thd_percent;
+      }
+      count++;
+    });
+
+    if (count === 0) return;
+    updateTelemOverviewUI(sumTemp / count, sumLoad / count, sumVolt / count, sumThd / count);
+  }
+
+  function updateTelemOverviewUI(avgTemp, avgLoad, avgVolt, avgThd) {
     setText("ov-temp", avgTemp.toFixed(1));
     setText("ov-load", avgLoad.toFixed(1));
     setText("ov-volt", avgVolt.toFixed(3));
@@ -1396,9 +1913,8 @@ body {
   }
 
   function updateAIDecisionPanel() {
-    // Collect all reasons from all assets, deduplicated
     var allReasons = [];
-    ASSESS_IDS.forEach(function (id) {
+    ASSET_IDS.forEach(function (id) {
       var r = state.assessments[id];
       if (!r || !r.reasons) return;
       r.reasons.forEach(function (reason) {
@@ -1417,11 +1933,10 @@ body {
       }
     }
 
-    // Recommended action — use worst asset
     var worstAction = "Continue normal operation with routine monitoring.";
     var worstInterpretation = "";
     var worstLevel = "LOW";
-    ASSESS_IDS.forEach(function (id) {
+    ASSET_IDS.forEach(function (id) {
       var r = state.assessments[id];
       if (!r) return;
       var rc = r.risk_classification || "LOW";
@@ -1453,14 +1968,42 @@ body {
   }
 
   // ==============================================================
+  // SIMULATION PANEL EVENT LISTENERS
+  // ==============================================================
+
+  function initSimPanel() {
+    var sevSlider = document.getElementById("sim-severity");
+    var sevVal    = document.getElementById("sim-severity-val");
+    if (sevSlider && sevVal) {
+      sevSlider.addEventListener("input", function () {
+        sevVal.textContent = sevSlider.value + "%";
+      });
+    }
+
+    var injectBtn = document.getElementById("sim-inject-btn");
+    if (injectBtn) injectBtn.addEventListener("click", doInject);
+
+    var rampBtn = document.getElementById("sim-ramp-btn");
+    if (rampBtn) rampBtn.addEventListener("click", doRamp);
+
+    var resetAssetBtn = document.getElementById("sim-reset-asset-btn");
+    if (resetAssetBtn) resetAssetBtn.addEventListener("click", doResetAsset);
+
+    var resetGridBtn = document.getElementById("sim-reset-grid-btn");
+    if (resetGridBtn) resetGridBtn.addEventListener("click", doResetGrid);
+
+    var stopBtn = document.getElementById("sim-stop-btn");
+    if (stopBtn) stopBtn.addEventListener("click", doStopSim);
+  }
+
+  // ==============================================================
   // INITIALIZATION
   // ==============================================================
 
-  // Initial health check, then start polling
+  initSimPanel();
   checkHealth();
   setInterval(checkHealth, HEALTH_INTERVAL_MS);
 
-  // First assessment immediately, then periodic
   runAssessments();
   setInterval(runAssessments, ASSESS_INTERVAL_MS);
 

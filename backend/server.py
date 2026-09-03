@@ -261,6 +261,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
         self._bytes_read = 0
         if self.path == "/v1/assess":
             self._assess()
+        elif self.path == "/v1/simulate":
+            self._simulate()
         else:
             self._fail(err.not_found())
 
@@ -426,6 +428,214 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "trust_boundary_applied": trust_boundary_applied,
                 "interpretation": result.get("interpretation"),
                 "recommended_action": result.get("recommended_action"),
+            },
+        }
+
+    # -- simulation --------------------------------------------------------
+
+    def _simulate(self) -> None:
+        started = time.monotonic()
+        try:
+            try:
+                length = int(self.headers.get("Content-Length", "") or "0")
+            except ValueError:
+                raise err.bad_request("Content-Length header must be an integer.")
+            if length < 0:
+                raise err.bad_request("Content-Length header must be non-negative.")
+            if length > MAX_BODY_BYTES:
+                raise err.payload_too_large(MAX_BODY_BYTES)
+            self._bytes_read = length
+
+            content_type = (
+                self.headers.get("Content-Type") or ""
+            ).split(";")[0].strip().lower()
+            if content_type != "application/json":
+                raise err.unsupported_media_type()
+
+            def _reject_nonfinite_constant(value: str):
+                raise ValueError("non-finite JSON constant")
+
+            raw = self.rfile.read(length)
+            try:
+                payload_obj = json.loads(
+                    raw.decode("utf-8"),
+                    parse_constant=_reject_nonfinite_constant,
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                raise err.invalid_json()
+
+            if not is_configured():
+                raise err.server_misconfigured()
+            if not verify_api_key(self.headers.get(API_KEY_HEADER, "")):
+                raise err.unauthorized()
+
+            allowed, retry_after = self.server.limiter.allow(self.client_address[0])
+            if not allowed:
+                raise err.rate_limited(retry_after)
+
+            global_limiter = getattr(self.server, "global_limiter", None)
+            if global_limiter is not None:
+                g_allowed, g_retry_after = global_limiter.allow("global")
+                if not g_allowed:
+                    raise err.rate_limited(g_retry_after)
+
+            if not isinstance(payload_obj, dict):
+                raise err.bad_request("Request body must be a JSON object.")
+
+            asset_id = str(payload_obj.get("asset_id", "")).strip()
+            if asset_id not in ("T01", "T02", "T03"):
+                raise err.bad_request("asset_id must be T01, T02, or T03.")
+
+            fault_type = str(payload_obj.get("fault_type", "")).strip()
+            valid_faults = ("overload", "overheating", "voltage_instability", "harmonic_distortion")
+            if fault_type not in valid_faults:
+                raise err.bad_request(
+                    "fault_type must be one of: " + ", ".join(valid_faults)
+                )
+
+            severity = float(payload_obj.get("severity", 0.5))
+            if not (0.0 <= severity <= 1.0):
+                raise err.bad_request("severity must be between 0.0 and 1.0.")
+
+            asset_map = {
+                "T01": {"rated_mva": 40.0, "asset_age_years": 6, "criticality": 0.9,
+                        "base_current_a": 442.72, "base_active_power_mw": 22.968,
+                        "base_reactive_power_mvar": 7.242},
+                "T02": {"rated_mva": 63.0, "asset_age_years": 11, "criticality": 1.0,
+                        "base_current_a": 783.4, "base_active_power_mw": 42.084,
+                        "base_reactive_power_mvar": 12.696},
+                "T03": {"rated_mva": 40.0, "asset_age_years": 17, "criticality": 1.0,
+                        "base_current_a": 505.8, "base_active_power_mw": 26.5,
+                        "base_reactive_power_mvar": 11.2},
+            }
+            asset = asset_map[asset_id]
+
+            from simulation.fault_injection import (
+                OperatingState,
+                apply_overload,
+                apply_overheating,
+                apply_voltage_instability,
+                apply_harmonic_distortion,
+            )
+
+            state = OperatingState(
+                voltage_pu=1.0, current_a=asset["base_current_a"],
+                frequency_hz=50.0,
+                active_power_mw=asset["base_active_power_mw"],
+                reactive_power_mvar=asset["base_reactive_power_mvar"],
+                power_factor=0.95, temperature_c=62.0,
+                load_percent=70.0, thd_percent=2.5,
+            )
+
+            fault_fn = {
+                "overload": apply_overload,
+                "overheating": apply_overheating,
+                "voltage_instability": apply_voltage_instability,
+                "harmonic_distortion": apply_harmonic_distortion,
+            }
+            state = fault_fn[fault_type](state, severity)
+
+            RANGES = {
+                "voltage_pu": (0.85, 1.15), "current_a": (0.0, 1600.0),
+                "frequency_hz": (45.0, 55.0), "active_power_mw": (0.0, 120.0),
+                "reactive_power_mvar": (-20.0, 60.0), "power_factor": (0.50, 1.00),
+                "temperature_c": (-20.0, 200.0), "load_percent": (0.0, 130.0),
+                "thd_percent": (0.0, 30.0),
+            }
+            for field, (lo, hi) in RANGES.items():
+                val = getattr(state, field)
+                setattr(state, field, max(lo, min(hi, val)))
+
+            voltage_deviation = abs(state.voltage_pu - 1.0)
+            frequency_deviation = abs(state.frequency_hz - 50.0)
+            temperature_excess = max(0.0, state.temperature_c - asset["base_current_a"] * 0.0)
+            temperature_excess = max(0.0, state.temperature_c - 55.0)
+            electrical_stress = voltage_deviation * (state.current_a / asset["base_current_a"]) * (state.temperature_c / 100.0)
+
+            fault_type_map = {
+                "overload": "normal", "overheating": "normal",
+                "voltage_instability": "normal", "harmonic_distortion": "normal",
+            }
+            telemetry = {
+                "rated_mva": asset["rated_mva"],
+                "asset_age_years": asset["asset_age_years"],
+                "criticality": asset["criticality"],
+                "voltage_pu": round(state.voltage_pu, 4),
+                "current_a": round(state.current_a, 2),
+                "frequency_hz": round(state.frequency_hz, 3),
+                "active_power_mw": round(state.active_power_mw, 3),
+                "reactive_power_mvar": round(state.reactive_power_mvar, 3),
+                "power_factor": round(state.power_factor, 4),
+                "temperature_c": round(state.temperature_c, 2),
+                "load_percent": round(state.load_percent, 2),
+                "thd_percent": round(state.thd_percent, 3),
+                "voltage_deviation": round(voltage_deviation, 4),
+                "frequency_deviation": round(frequency_deviation, 4),
+                "temperature_excess": round(temperature_excess, 2),
+                "electrical_stress": round(electrical_stress, 4),
+                "fault_type": fault_type_map.get(fault_type, "normal"),
+                "previous_faults": 0,
+            }
+
+            engine = _get_engine()
+            result = engine(telemetry, trusted_source=False)
+
+            envelope = self._sim_envelope(
+                self._correlation_id, result, asset_id,
+                fault_type, severity, telemetry,
+            )
+            self._write_json(200, envelope)
+            self._log_record(status=200, duration_ms=time.monotonic() - started)
+        except Exception as exc:
+            from ai.ml.artifact_guard import TelemetryValidationError
+            if isinstance(exc, TelemetryValidationError):
+                self._fail(
+                    err.validation_failed(
+                        {"telemetry": "Simulated telemetry failed engine-level validation."}
+                    ),
+                    started=started,
+                )
+            elif isinstance(exc, err.ApiError):
+                self._fail(exc, started=started)
+            else:
+                logging.getLogger("gridsentinel.api").exception("unhandled_simulation_exception")
+                self._fail(err.internal_error(), started=started)
+
+    @staticmethod
+    def _sim_envelope(request_id, result, asset_id, fault_type, severity, telemetry):
+        alert_state = result.get("alert_state", "NORMAL")
+        trust_boundary_applied = bool(result.get("trust_boundary_applied", False))
+        investigation_required = bool(
+            alert_state == "INVESTIGATION" or trust_boundary_applied
+        )
+        return {
+            "request_id": request_id,
+            "api_version": API_VERSION,
+            "status": "ok",
+            "simulation": {
+                "active": True,
+                "asset_id": asset_id,
+                "fault_type": fault_type,
+                "severity": severity,
+                "simulated_telemetry": {
+                    "temperature_c": telemetry["temperature_c"],
+                    "load_percent": telemetry["load_percent"],
+                    "voltage_pu": telemetry["voltage_pu"],
+                    "thd_percent": telemetry["thd_percent"],
+                },
+            },
+            "result": {
+                "risk_classification": result.get("risk_level", "LOW"),
+                "prediction": result.get("prediction", "NORMAL"),
+                "alert_state": alert_state,
+                "investigation_required": investigation_required,
+                "failure_probability": result.get("failure_probability"),
+                "threshold": result.get("threshold"),
+                "risk_score": result.get("risk_score"),
+                "trust_boundary_applied": trust_boundary_applied,
+                "interpretation": result.get("interpretation"),
+                "recommended_action": result.get("recommended_action"),
+                "reasons": result.get("reasons", []),
             },
         }
 
