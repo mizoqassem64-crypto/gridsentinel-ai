@@ -817,6 +817,205 @@ body {
   letter-spacing: 0.05em;
   margin-left: 6px;
 }
+
+/* ---- H4 Explainability ---- */
+
+.asset-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.asset-selector .asel-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+}
+
+.asel-pill {
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.asel-pill:hover { border-color: var(--accent); }
+.asel-pill.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+.asel-pill.selected .asset-sim-tag { color: var(--red); }
+
+.explain-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 1000px) {
+  .explain-grid { grid-template-columns: 1fr; }
+}
+
+.explain-section { margin-top: 18px; }
+.explain-section:first-child { margin-top: 0; }
+.explain-section-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.explain-section-label .badge { font-size: 0.58rem; }
+
+.decision-rows { display: flex; flex-direction: column; gap: 8px; }
+.decision-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.85rem;
+}
+.decision-row:last-child { border-bottom: none; }
+.decision-row .dkey { color: var(--text-muted); }
+.decision-row .dval { font-weight: 600; }
+.decision-row .dval.mono { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; }
+
+.interpretation-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+}
+.interpretation-block .i-label {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.interpretation-block .action {
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.reason-list { display: flex; flex-direction: column; gap: 6px; }
+.reason-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-muted);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.reason-chip .r-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.reason-chip.r-crit .r-dot { background: var(--red); }
+.reason-chip.r-warn .r-dot { background: var(--amber); }
+.reason-chip.r-ok   .r-dot { background: var(--green); }
+.reason-chip.r-info .r-dot { background: var(--accent); }
+.reason-chip.r-crit { border-left-color: var(--red); }
+.reason-chip.r-warn { border-left-color: var(--amber); }
+.reason-chip.r-ok   { border-left-color: var(--green); }
+.reason-chip.r-info { border-left-color: var(--accent); }
+.reason-none { color: var(--text-muted); font-style: italic; font-size: 0.82rem; }
+
+.imp-bars { display: flex; flex-direction: column; gap: 7px; }
+.imp-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 10px; }
+@media (max-width: 700px) { .imp-row { grid-template-columns: 96px 1fr 48px; } }
+.imp-name { font-size: 0.74rem; color: var(--text-secondary); text-align: right; text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-track { background: var(--bg-inset); border-radius: 4px; height: 14px; overflow: hidden; border: 1px solid var(--border);
+  position: relative; }
+.imp-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--cyan)); border-radius: 3px; transition: width .4s ease; }
+.imp-val { font-size: 0.68rem; color: var(--text-muted); font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; text-align: right; }
+
+.evidence-telemetry { display: flex; flex-direction: column; gap: 8px; }
+.ev-fields { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev-field {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+.ev-field .ev-k { color: var(--text-muted); display: block; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.ev-field .ev-v { font-family: "SF Mono", "Cascadia Code", "Consolas", monospace; color: var(--text-primary); }
+.ev-field .ev-v.warn { color: var(--amber); }
+.ev-field .ev-v.crit { color: var(--red); }
+
+.compose-rows { display: flex; flex-direction: column; gap: 10px; }
+.compose-row .c-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; display:flex; justify-content:space-between; }
+.compose-row .c-track { background: var(--bg-inset); border-radius: 4px; height: 16px; overflow: hidden; border: 1px solid var(--border); }
+.compose-row .c-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+.c-fill.ml { background: linear-gradient(90deg, var(--blue), var(--cyan)); }
+.c-fill.op { background: linear-gradient(90deg, var(--amber), #fbbf24); }
+.compose-note { font-size: 0.68rem; color: var(--text-muted); margin-top: 8px; font-style: italic; }
+
+.trust-indicator {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+}
+.trust-indicator .t-icon { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+.trust-indicator.t-trusted { border-left: 4px solid var(--green); }
+.trust-indicator.t-investigate { border-left: 4px solid var(--amber); }
+.trust-indicator.t-unverified { border-left: 4px solid var(--red); }
+.trust-indicator .t-title { font-size: 0.9rem; font-weight: 700; }
+.trust-indicator .t-sub { font-size: 0.78rem; color: var(--text-secondary); margin-top: 3px; line-height: 1.45; }
+.trust-indicator.t-trusted .t-title { color: var(--green); }
+.trust-indicator.t-investigate .t-title { color: var(--amber); }
+.trust-indicator.t-unverified .t-title { color: var(--red); }
+
+.guard-block {
+  padding: 12px 14px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--amber);
+  border-radius: var(--radius);
+}
+.guard-block .g-title { font-size: 0.8rem; font-weight: 700; color: var(--amber); margin-bottom: 6px; }
+.guard-block .g-list { display: flex; flex-direction: column; gap: 5px; }
+.guard-block .g-item { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45; }
+.guard-none { color: var(--text-muted); font-style: italic; font-size: 0.82rem; }
+
+.derive-tag {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 </style>
 </head>
 <body class="state-initial">
@@ -1186,6 +1385,121 @@ body {
   </div>
 
   <!-- ============================================================
+       E. ENGINEERING EXPLAINABILITY (H4)
+       Per-asset, data-driven. Every value is sourced from the
+       authoritative API/artifact. No fabricated figures.
+       ============================================================ -->
+  <div class="section-title">Engineering Explainability</div>
+
+  <!-- Asset selector -->
+  <div class="asset-selector">
+    <span class="asel-label">Inspecting Transformer</span>
+    <button class="asel-pill selected" id="asel-T01" data-asset="T01">T01</button>
+    <button class="asel-pill" id="asel-T02" data-asset="T02">T02</button>
+    <button class="asel-pill" id="asel-T03" data-asset="T03">T03</button>
+    <span class="asel-label" id="asel-source" style="margin-left:auto;text-transform:none;letter-spacing:0;"></span>
+  </div>
+
+  <div class="explain-grid">
+
+    <!-- =========== LEFT COLUMN =========== -->
+
+    <!-- A. Decision Explanation Panel -->
+    <div class="panel">
+      <div class="panel-title">Decision Explanation &mdash; <span id="x-a-title">T01</span></div>
+
+      <div class="decision-rows" id="x-decision-rows">
+        <div class="decision-row"><span class="dkey">Risk Classification</span><span class="dval mono" id="x-risk-cls">--</span></div>
+        <div class="decision-row"><span class="dkey">Risk Score</span><span class="dval mono" id="x-risk-score">--</span></div>
+        <div class="decision-row"><span class="dkey">Failure Probability</span><span class="dval mono" id="x-prob">--</span></div>
+        <div class="decision-row"><span class="dkey">ML Prediction</span><span class="dval mono" id="x-pred">--</span></div>
+        <div class="decision-row"><span class="dkey">Alert State</span><span class="dval" id="x-alert">--</span></div>
+        <div class="decision-row"><span class="dkey">Investigation Required</span><span class="dval" id="x-invest">--</span></div>
+      </div>
+
+      <div class="interpretation-block">
+        <div class="i-label">Interpretation</div>
+        <div id="x-interpretation">Awaiting assessment&hellip;</div>
+        <div class="action"><strong>Recommended action:</strong> <span id="x-action">&mdash;</span></div>
+      </div>
+    </div>
+
+    <!-- B. Engineering Reasons -->
+    <div class="panel">
+      <div class="panel-title">Engineering Reasons &mdash; Detected Conditions</div>
+      <div class="reason-list" id="x-reasons">
+        <div class="reason-none">No conditions detected yet.</div>
+      </div>
+    </div>
+
+    <!-- =========== RIGHT COLUMN =========== -->
+
+    <!-- C. Model Feature Importance (global artifact) -->
+    <div class="panel">
+      <div class="panel-title">
+        Model Feature Importance
+        <span class="derive-tag" style="margin-left:8px;">global &middot; model</span>
+      </div>
+      <div class="imp-bars" id="x-imp">
+        <div class="reason-none">Loading model feature importance&hellip;</div>
+      </div>
+      <p class="compose-note" style="margin-top:10px;">
+        Model feature importance is an aggregate ranking of which inputs the
+        neural network most relies on across the training population. It is
+        <strong>not</strong> a per-asset causal explanation.
+      </p>
+    </div>
+
+    <!-- D. Current Asset Risk Evidence -->
+    <div class="panel">
+      <div class="panel-title">Current Asset Risk Evidence &mdash; <span id="x-d-title">T01</span></div>
+      <div class="explain-section">
+        <div class="explain-section-label">Live Telemetry Signals</div>
+        <div class="ev-fields" id="x-ev-fields"></div>
+      </div>
+      <div class="explain-section">
+        <div class="explain-section-label">Signals Detected</div>
+        <div class="reason-list" id="x-evidence-reasons"></div>
+      </div>
+    </div>
+
+    <!-- E. Risk Composition -->
+    <div class="panel">
+      <div class="panel-title">Risk Composition</div>
+      <div class="compose-rows" id="x-compose">
+        <div class="compose-row">
+          <div class="c-label"><span>ML / Neural Network Contribution</span><span class="mono" id="x-ml-val">--</span></div>
+          <div class="c-track"><div class="c-fill ml" id="x-ml-bar" style="width:0%"></div></div>
+        </div>
+        <div class="compose-row">
+          <div class="c-label"><span>Operational / Physics Contribution</span><span class="mono" id="x-op-val">--</span></div>
+          <div class="c-track"><div class="c-fill op" id="x-op-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="compose-note" id="x-compose-note">
+        ML and operational scores are returned directly by the risk engine.
+      </div>
+    </div>
+
+    <!-- F. Trust Boundary Indicator -->
+    <div class="panel">
+      <div class="panel-title">Telemetry Trust Boundary</div>
+      <div id="x-trust"></div>
+      <div class="explain-section">
+        <div class="explain-section-label">Trust Signals</div>
+        <div class="reason-list" id="x-trust-reasons"></div>
+      </div>
+    </div>
+
+    <!-- G. Safety Guard Explanation -->
+    <div class="panel">
+      <div class="panel-title">Safety Guard V2.1</div>
+      <div id="x-guard"></div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================
        G. FOOTER
        ============================================================ -->
   <footer class="footer">
@@ -1274,6 +1588,7 @@ body {
     assessments: {},
     gridWorst: "LOW",
     gridAlertCount: 0,
+    selectedAsset: "T01",
     sim: {
       active: false,
       assetId: null,
@@ -1283,7 +1598,8 @@ body {
     rampTimer: null,
     rampSteps: [],
     rampStepIndex: 0,
-    simulateAvailable: null
+    simulateAvailable: null,
+    featureImportance: null
   };
 
   // ==============================================================
@@ -1440,6 +1756,7 @@ body {
         updateRiskPanel();
         updateTelemetryOverview();
         updateAIDecisionPanel();
+        renderExplainability();
 
         document.body.classList.remove("state-initial");
       }
@@ -1494,6 +1811,7 @@ body {
       updateRiskPanel();
       updateTelemetryOverview();
       updateAIDecisionPanel();
+      renderExplainability();
     });
   }
 
@@ -1642,6 +1960,7 @@ body {
     updateRiskPanel();
     updateTelemetryOverviewFromSim();
     updateAIDecisionPanel();
+    renderExplainability();
   }
 
   function showSimError(msg) {
@@ -1968,6 +2287,293 @@ body {
   }
 
   // ==============================================================
+  // H4 ENGINEERING EXPLAINABILITY
+  // All values originate from the authoritative API result or the
+  // feature-importance artifact. No values are invented here.
+  // ==============================================================
+
+  function reasonCategory(reason) {
+    var r = String(reason).toLowerCase();
+    if (r.indexOf("critical") !== -1 || r.indexOf("severe") !== -1 ||
+        r.indexOf("failure") !== -1 || r.indexOf("shutdown") !== -1) return "r-crit";
+    if (r.indexOf("elevated") !== -1 || r.indexOf("high") !== -1 ||
+        r.indexOf("instability") !== -1 || r.indexOf("overload") !== -1 ||
+        r.indexOf("inconsist") !== -1 || r.indexOf("cannot be trusted") !== -1 ||
+        r.indexOf("investigation") !== -1 || r.indexOf("distortion") !== -1 ||
+        r.indexOf("deviation") !== -1 || r.indexOf("abnormal") !== -1 ||
+        r.indexOf("unverified") !== -1 || r.indexOf("guard") !== -1) return "r-warn";
+    return "r-info";
+  }
+
+  function setTextIf(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function setHtmlIf(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
+  function buildReasonChips(reasons) {
+    if (!reasons || reasons.length === 0) {
+      return '<div class="reason-none">No conditions detected. Telemetry within normal limits.</div>';
+    }
+    return reasons.map(function (reason) {
+      var cat = reasonCategory(reason);
+      return '<div class="reason-chip ' + cat + '">' +
+             '<span class="r-dot"></span><span>' + escapeHtml(reason) + '</span></div>';
+    }).join("");
+  }
+
+  // A. Decision Explanation Panel
+  function renderDecisionPanel(id, res) {
+    var rc = res.risk_classification || "LOW";
+    var color = riskColor(rc);
+
+    setTextIf("x-a-title", id);
+    setTextIf("x-risk-cls", rc);
+    setTextIf("x-risk-score", res.risk_score != null ? Number(res.risk_score).toFixed(1) : "--");
+    setTextIf("x-prob", res.failure_probability != null ? Number(res.failure_probability).toFixed(4) : "--");
+    setTextIf("x-pred", res.prediction || "--");
+    setTextIf("x-alert", res.alert_state || "NORMAL");
+    setTextIf("x-invest", res.investigation_required ? "YES" : "NO");
+    setTextIf("x-interpretation", res.interpretation || "Awaiting assessment\u2026");
+    setTextIf("x-action", res.recommended_action || "\u2014");
+
+    var cls = document.getElementById("x-risk-cls");
+    if (cls) cls.className = "dval mono text-" + color;
+    var preset = document.getElementById("x-alert");
+    if (preset) preset.className = "dval text-" + (
+      res.alert_state === "FAILURE_ALERT" ? "red" :
+      res.alert_state === "INVESTIGATION" ? "amber" : "green"
+    );
+    var inve = document.getElementById("x-invest");
+    if (inve) {
+      inve.className = "dval " + (res.investigation_required ? "text-amber" : "text-green");
+    }
+  }
+
+  // B. Engineering Reasons
+  function renderReasons(id, res) {
+    setHtmlIf("x-reasons", buildReasonChips(res.reasons));
+  }
+
+  // C. Model Feature Importance (from artifact endpoint)
+  function loadFeatureImportance() {
+    apiFetch("GET", "/v1/feature-importance").then(function (env) {
+      state.featureImportance = env && env.features ? env.features : [];
+      renderFeatureImportance();
+    }).catch(function () {
+      setHtmlIf("x-imp",
+        '<div class="reason-none">Model feature importance unavailable (API disconnected).</div>');
+    });
+  }
+
+  function renderFeatureImportance() {
+    var el = document.getElementById("x-imp");
+    if (!el) return;
+    if (!state.featureImportance || state.featureImportance.length === 0) {
+      setHtmlIf("x-imp", '<div class="reason-none">No feature importance data.</div>');
+      return;
+    }
+    var top = state.featureImportance.slice(0, 8);
+    var maxDrop = top[0].f1_drop || 1;
+    var html = top.map(function (f) {
+      var pct = clamp((f.f1_drop / maxDrop) * 100, 4, 100);
+      var label = String(f.feature).split("_").join(" ");
+      return '<div class="imp-row">' +
+             '<span class="imp-name" title="' + escapeHtml(f.feature) + '">' + escapeHtml(label) + '</span>' +
+             '<div class="imp-track"><div class="imp-fill" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+             '<span class="imp-val">' + f.f1_drop.toFixed(3) + '</span>' +
+             '</div>';
+    }).join("");
+    setHtmlIf("x-imp", html);
+  }
+
+  // D. Current Asset Risk Evidence (telemetry from API/baseline + reasons)
+  function evidenceSeverity(field, value) {
+    var thresholds = {
+      temperature_c: { warn: 85, crit: 100 },
+      load_percent:  { warn: 80, crit: 90 },
+      thd_percent:   { warn: 5,  crit: 10 },
+      voltage_pu:    { warn: 0.03, crit: 0.05 }
+    };
+    var t = thresholds[field];
+    if (!t) return { cls: "", text: String(value) };
+    if (field === "voltage_pu") {
+      var vd = Math.abs(value - 1.0);
+      var cls = vd >= t.crit ? "crit" : vd >= t.warn ? "warn" : "";
+      return { cls: cls, text: value.toFixed(3) + " pu" };
+    }
+    var c = value >= t.crit ? "crit" : value >= t.warn ? "warn" : "";
+    var unit = field === "temperature_c" ? " \u00B0C" : field === "load_percent" ? "%" : "%";
+    return { cls: c, text: value.toFixed(1) + unit };
+  }
+
+  function renderEvidence(id, res) {
+    setTextIf("x-d-title", id);
+    var t = TELEMETRY[id] || {};
+    var sim = state.sim.active && state.sim.assetId === id &&
+              state.assessments[id] && state.assessments[id].simulated_telemetry;
+    var simT = sim ? state.assessments[id].simulated_telemetry : null;
+
+    var fields = [
+      { k: "Temperature", f: "temperature_c" },
+      { k: "Load",        f: "load_percent" },
+      { k: "Voltage",     f: "voltage_pu" },
+      { k: "THD",         f: "thd_percent" }
+    ];
+    var html = fields.map(function (fd) {
+      var val = (simT && simT[fd.f] != null) ? simT[fd.f] : t[fd.f];
+      var s = evidenceSeverity(fd.f, typeof val === "number" ? val : 0);
+      return '<div class="ev-field"><span class="ev-k">' + fd.k + '</span>' +
+             '<span class="ev-v ' + s.cls + '">' + s.text + '</span></div>';
+    }).join("");
+    setHtmlIf("x-ev-fields", html);
+    setHtmlIf("x-evidence-reasons", buildReasonChips(res.reasons));
+  }
+
+  // E. Risk Composition (ML + Operational scores from API, with fallback derivation label)
+  function renderCompose(id, res) {
+    var prob = res.failure_probability;
+    var score = res.risk_score;
+
+    var ml = res.ml_score;
+    var op = res.operational_score;
+    var direct = (typeof ml === "number" && typeof op === "number");
+
+    var noteEl = document.getElementById("x-compose-note");
+    if (!direct) {
+      // Not returned directly: derive mathematically and label as such.
+      ml = (prob || 0) * 60;
+      op = (score || 0) - ml;
+      if (noteEl) noteEl.textContent =
+        "Derived from API response: ML = probability \u00D7 60; Operational = risk score \u2212 ML.";
+    } else {
+      if (noteEl) noteEl.textContent =
+        "ML and operational scores are returned directly by the risk engine.";
+    }
+
+    var tot = (ml || 0) + (op || 0) || 1;
+    setTextIf("x-ml-val", (ml || 0).toFixed(2));
+    setTextIf("x-op-val", (op || 0).toFixed(2));
+    var mlBar = document.getElementById("x-ml-bar");
+    var opBar = document.getElementById("x-op-bar");
+    if (mlBar) mlBar.style.width = clamp((ml / tot) * 100, 0, 100).toFixed(1) + "%";
+    if (opBar) opBar.style.width = clamp((op / tot) * 100, 0, 100).toFixed(1) + "%";
+  }
+
+  // F. Trust Boundary Indicator
+  function renderTrust(res) {
+    var container = document.getElementById("x-trust");
+    if (!container) return;
+
+    var trusted = res.telemetry_trusted === true;
+    var boundaryApplied = res.trust_boundary_applied === true;
+    var investigate = res.alert_state === "INVESTIGATION" ||
+                      res.investigation_required === true ||
+                      boundaryApplied;
+
+    var title, sub, cls, icon;
+    if (trusted) {
+      cls = "t-trusted"; icon = "\u2713"; title = "TRUSTED / VERIFIED";
+      sub = "Server-verified telemetry. Confidence is high enough for autonomous classification.";
+    } else if (investigate) {
+      cls = "t-investigate"; icon = "\u26A0"; title = "INVESTIGATION REQUIRED";
+      sub = "Telemetry provenance could not be verified while abnormal or inconsistent signals are present. Fails-safe to investigation.";
+    } else {
+      cls = "t-unverified"; icon = "\u25B2"; title = "UNVERIFIED TELEMETRY";
+      sub = "Telemetry is not server-verified. Treat results with caution.";
+    }
+
+    container.className = "trust-indicator " + cls;
+    container.innerHTML = '<span class="t-icon">' + icon + '</span>' +
+      '<div><div class="t-title">' + title + '</div>' +
+      '<div class="t-sub">' + sub + '</div></div>';
+
+    var trustReasons = res.trust_boundary_reasons || [];
+    if (investigate && trustReasons.length === 0 && boundaryApplied) {
+      trustReasons = res.reasons || [];
+    }
+    setHtmlIf("x-trust-reasons", buildReasonChips(trustReasons));
+  }
+
+  // G. Safety Guard Explanation
+  function renderGuard(res) {
+    var container = document.getElementById("x-guard");
+    if (!container) return;
+    var guardApplied = res.guard_applied === true;
+    var guardReasons = res.guard_reasons || [];
+
+    if (!guardApplied) {
+      container.className = "guard-block";
+      container.innerHTML =
+        '<div class="g-title">Safety Guard: Not Triggered</div>' +
+        '<div class="reason-none">No safety floor or escalation was applied. The risk score reflects the raw hybrid assessment.</div>';
+      return;
+    }
+
+    var items = guardReasons.length > 0 ? guardReasons : ["Safety guard applied an override to the final risk state."];
+    container.className = "guard-block";
+    container.innerHTML =
+      '<div class="g-title">Safety Guard: Escalated Decision</div>' +
+      '<div class="g-list">' + items.map(function (r) {
+        return '<div class="g-item">\u2022 ' + escapeHtml(r) + '</div>';
+      }).join("") +
+      '<div class="g-item" style="margin-top:6px;">This engineering overlay protects against underestimating severe physical conditions; it does not alter the model' +
+      '&#39;s failure probability.</div></div>';
+  }
+
+  function renderExplainability() {
+    var id = state.selectedAsset;
+    var res = state.assessments[id] || {};
+
+    var sourceEl = document.getElementById("asel-source");
+    if (sourceEl) {
+      if (state.sim.active && state.sim.assetId === id) {
+        sourceEl.textContent = "Source: LIVE SIMULATION \u00B7 " +
+          (FAULT_LABELS[state.sim.faultType] || state.sim.faultType) +
+          " \u00B7 severity " + Math.round(state.sim.severity * 100) + "%";
+        sourceEl.style.color = "var(--red)";
+      } else {
+        sourceEl.textContent = "Source: LIVE /v1/assess";
+        sourceEl.style.color = "var(--text-muted)";
+      }
+    }
+
+    renderDecisionPanel(id, res);
+    renderReasons(id, res);
+    renderFeatureImportance();
+    renderEvidence(id, res);
+    renderCompose(id, res);
+    renderTrust(res);
+    renderGuard(res);
+  }
+
+  function selectAsset(id) {
+    state.selectedAsset = id;
+    ASSET_IDS.forEach(function (aid) {
+      var pill = document.getElementById("asel-" + aid);
+      if (pill) pill.className = "asel-pill" + (aid === id ? " selected" : "");
+    });
+    renderExplainability();
+  }
+
+  function initAssetSelector() {
+    ASSET_IDS.forEach(function (aid) {
+      var pill = document.getElementById("asel-" + aid);
+      if (pill) pill.addEventListener("click", function () { selectAsset(aid); });
+      // Clicking an asset card also selects it in the explainability panel.
+      var card = document.getElementById("card-" + aid.toLowerCase());
+      if (card) {
+        card.style.cursor = "pointer";
+        card.addEventListener("click", function () { selectAsset(aid); });
+      }
+    });
+  }
+
+  // ==============================================================
   // SIMULATION PANEL EVENT LISTENERS
   // ==============================================================
 
@@ -2001,6 +2607,8 @@ body {
   // ==============================================================
 
   initSimPanel();
+  initAssetSelector();
+  loadFeatureImportance();
   checkHealth();
   setInterval(checkHealth, HEALTH_INTERVAL_MS);
 

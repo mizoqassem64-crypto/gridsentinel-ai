@@ -50,6 +50,15 @@ _DEFAULT_SOCKET_TIMEOUT = 10.0
 _DEFAULT_MAX_CONCURRENT = 32
 _MAX_REQUEST_LINE = 4096
 
+# Read-only reference to the model feature-importance artifact. This file is
+# served to the dashboard for H4 model explainability. It is opened for read
+# only and is never modified by the API.
+_FEATURE_IMPORTANCE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "models",
+    "v2_feature_importance.csv",
+)
+
 _READY_STATE_UNKNOWN = "unknown"
 _READY_STATE_READY = "ready"
 _READY_STATE_NOT_READY = "not_ready"
@@ -228,6 +237,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             self._health()
         elif self.path == "/health/ready":
             self._ready()
+        elif self.path == "/v1/feature-importance":
+            self._feature_importance()
         else:
             self._fail(err.not_found())
 
@@ -305,6 +316,66 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 error_category="not_ready",
                 duration_ms=time.monotonic() - started,
             )
+
+    # -- feature importance (read-only artifact) -------------------------
+
+    def _feature_importance(self) -> None:
+        started = time.monotonic()
+        try:
+            if not is_configured():
+                raise err.server_misconfigured()
+            if not verify_api_key(self.headers.get(API_KEY_HEADER, "")):
+                raise err.unauthorized()
+
+            path = _FEATURE_IMPORTANCE_PATH
+            if not os.path.isfile(path):
+                raise err.internal_error()
+
+            rows: list = []
+            with open(path, "r", encoding="utf-8") as fh:
+                header = fh.readline()
+                columns = [c.strip() for c in header.split(",")]
+                try:
+                    fname_idx = columns.index("feature")
+                    f1drop_idx = columns.index("f1_drop")
+                    baseline_idx = columns.index("baseline_f1")
+                    permuted_idx = columns.index("permuted_f1")
+                except ValueError:
+                    raise err.internal_error()
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) <= max(fname_idx, f1drop_idx, baseline_idx, permuted_idx):
+                        continue
+                    try:
+                        rows.append({
+                            "feature": parts[fname_idx],
+                            "baseline_f1": float(parts[baseline_idx]),
+                            "permuted_f1": float(parts[permuted_idx]),
+                            "f1_drop": float(parts[f1drop_idx]),
+                        })
+                    except ValueError:
+                        continue
+
+            rows.sort(key=lambda r: r["f1_drop"], reverse=True)
+
+            payload = {
+                "request_id": self._correlation_id,
+                "api_version": API_VERSION,
+                "status": "ok",
+                "source": "models/v2_feature_importance.csv",
+                "count": len(rows),
+                "features": rows,
+            }
+            self._write_json(200, payload)
+            self._log_record(status=200, duration_ms=time.monotonic() - started)
+        except err.ApiError as exc:
+            self._fail(exc, started=started)
+        except Exception:
+            logging.getLogger("gridsentinel.api").exception("feature_importance_error")
+            self._fail(err.internal_error(), started=started)
 
     # -- assessment --------------------------------------------------------
 
@@ -428,6 +499,16 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "trust_boundary_applied": trust_boundary_applied,
                 "interpretation": result.get("interpretation"),
                 "recommended_action": result.get("recommended_action"),
+                # H4 explainability fields (additive pass-through of the
+                # authoritative engine outputs; never computed or fabricated
+                # here).
+                "ml_score": result.get("ml_score"),
+                "operational_score": result.get("operational_score"),
+                "reasons": result.get("reasons", []),
+                "guard_applied": bool(result.get("guard_applied", False)),
+                "guard_reasons": result.get("guard_reasons", []),
+                "telemetry_trusted": bool(result.get("telemetry_trusted", False)),
+                "trust_boundary_reasons": result.get("trust_boundary_reasons", []),
             },
         }
 
@@ -636,6 +717,15 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "interpretation": result.get("interpretation"),
                 "recommended_action": result.get("recommended_action"),
                 "reasons": result.get("reasons", []),
+                # H4 explainability fields (additive pass-through of the
+                # authoritative engine outputs; never computed or fabricated
+                # here).
+                "ml_score": result.get("ml_score"),
+                "operational_score": result.get("operational_score"),
+                "guard_applied": bool(result.get("guard_applied", False)),
+                "guard_reasons": result.get("guard_reasons", []),
+                "telemetry_trusted": bool(result.get("telemetry_trusted", False)),
+                "trust_boundary_reasons": result.get("trust_boundary_reasons", []),
             },
         }
 
