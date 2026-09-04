@@ -118,18 +118,29 @@ class GridSentinelServer(ThreadingHTTPServer):
 
     def handle_error(self, request, client_address):
         exc = sys.exc_info()[1]
-        log_event(
-            {
-                "ts": time.time(),
-                "level": "warn",
-                "client_ip_hash": client_ip_hash(client_address[0]),
-                "principal": hashed_principal(),
-                "error_category": (
-                    "handler_error_" + type(exc).__name__ if exc else "handler_error"
-                ),
-                "status": 0,
-            }
-        )
+        try:
+            # Server-level error handler: ``self`` is the server, not the
+            # Handler, so no per-request X-API-Key header is available here.
+            # Use the stable configured-key principal (as _reject_overload
+            # does) rather than hashed_principal(), which requires a header
+            # value and would otherwise raise a TypeError and cascade.
+            log_event(
+                {
+                    "ts": time.time(),
+                    "level": "warn",
+                    "client_ip_hash": client_ip_hash(client_address[0]),
+                    "principal": first_key_principal(),
+                    "error_category": (
+                        "handler_error_" + type(exc).__name__ if exc else "handler_error"
+                    ),
+                    "status": 0,
+                }
+            )
+        except Exception:
+            # The error handler must never escalate into a second unhandled
+            # exception. If structured reporting itself fails, surface a raw
+            # log line (still visible) and return without re-raising.
+            logging.getLogger("gridsentinel.api").exception("handle_error_failed")
 
     def _reject_overload(self, request, client_address) -> None:
         request_id = uuid.uuid4().hex
@@ -191,6 +202,18 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             return False
         return super().parse_request()
 
+    def handle_one_request(self) -> None:
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            # The stdlib flushes any buffered response body *after* the
+            # request handler returns. If the client disconnected during
+            # transmission, that final flush raises a transport error here,
+            # outside _write_json(). Absorb it so the disconnect is treated
+            # as a normal end of connection instead of escalating to the
+            # server error handler (which would emit a spurious traceback).
+            self.close_connection = True
+
     # -- plumbing ----------------------------------------------------------
 
     def _origin_allowed(self) -> bool:
@@ -203,19 +226,35 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
 
     def _write_json(self, status: int, payload: Dict[str, Any],
-                    headers: Dict[str, str] | None = None) -> None:
+                    headers: Dict[str, str] | None = None) -> bool:
+        """Serialize and transmit ``payload`` as a JSON response.
+
+        Returns ``True`` when the response was written to the client, or
+        ``False`` when the peer disconnected mid-transmission. A disconnect
+        (``BrokenPipeError`` / ``ConnectionResetError``) is an expected
+        transport-level condition, not an application error: there is no
+        longer a client to receive an error response, so the exception is
+        absorbed here instead of escaping into a caller that might try to
+        ``_fail()`` again and recurse.
+        """
         body = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
-        self.send_response(status)
-        self._send_cors_headers()
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Request-ID", self._correlation_id)
-        self.send_header("Server", "GridSentinel")
-        for key, value in (headers or {}).items():
-            self.send_header(key, value)
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Request-ID", self._correlation_id)
+            self.send_header("Server", "GridSentinel")
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(body)
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+            return False
+        return True
 
     def log_message(self, fmt: str, *args) -> None:
         # Silence the base logger; access/error records are emitted
@@ -329,8 +368,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
     def _health(self) -> None:
         started = time.monotonic()
         payload = {"status": "ok", "service": SERVICE_NAME, "api_version": API_VERSION}
-        self._write_json(200, payload)
-        self._log_record(status=200, duration_ms=time.monotonic() - started)
+        if self._write_json(200, payload):
+            self._log_record(status=200, duration_ms=time.monotonic() - started)
 
     def _ready(self) -> None:
         started = time.monotonic()
@@ -343,8 +382,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "ready": True,
                 "engine_state": state,
             }
-            self._write_json(200, payload)
-            self._log_record(status=200, duration_ms=time.monotonic() - started)
+            if self._write_json(200, payload):
+                self._log_record(status=200, duration_ms=time.monotonic() - started)
         else:
             payload = {
                 "status": "error",
@@ -357,12 +396,12 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                     "message": "Engine initialization failed. Restart required.",
                 },
             }
-            self._write_json(503, payload)
-            self._log_record(
-                status=503,
-                error_category="not_ready",
-                duration_ms=time.monotonic() - started,
-            )
+            if self._write_json(503, payload):
+                self._log_record(
+                    status=503,
+                    error_category="not_ready",
+                    duration_ms=time.monotonic() - started,
+                )
 
     # -- feature importance (read-only artifact) -------------------------
 
@@ -416,8 +455,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "count": len(rows),
                 "features": rows,
             }
-            self._write_json(200, payload)
-            self._log_record(status=200, duration_ms=time.monotonic() - started)
+            if self._write_json(200, payload):
+                self._log_record(status=200, duration_ms=time.monotonic() - started)
         except err.ApiError as exc:
             self._fail(exc, started=started)
         except Exception:
@@ -498,8 +537,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             result = engine(telemetry, trusted_source=False)
 
             envelope = self._envelope(self._correlation_id, result)
-            self._write_json(200, envelope)
-            self._log_record(status=200, duration_ms=time.monotonic() - started)
+            if self._write_json(200, envelope):
+                self._log_record(status=200, duration_ms=time.monotonic() - started)
         except Exception as exc:
             # ai.ml.artifact_guard (torch/numpy) is imported lazily so the
             # process can accept connections without the ML stack resident.
@@ -712,8 +751,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 self._correlation_id, result, asset_id,
                 fault_type, severity, telemetry,
             )
-            self._write_json(200, envelope)
-            self._log_record(status=200, duration_ms=time.monotonic() - started)
+            if self._write_json(200, envelope):
+                self._log_record(status=200, duration_ms=time.monotonic() - started)
         except Exception as exc:
             from ai.ml.artifact_guard import TelemetryValidationError
             if isinstance(exc, TelemetryValidationError):
