@@ -1167,6 +1167,14 @@ body {
       <div class="sim-active-detail" id="sim-active-detail"></div>
       <button class="sim-btn sim-btn-stop" id="sim-stop-btn" style="margin-top:8px;">Stop Simulation</button>
     </div>
+
+    <!-- H5 Guided Demo Mode -->
+    <div class="demo-bar" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border); display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <button class="sim-btn sim-btn-inject" id="demo-btn">Start Guided Demo</button>
+      <span class="demo-status" id="demo-status" style="font-size:0.8rem; color:var(--text-muted);">
+        Idle &mdash; click Start Guided Demo to launch the 60&ndash;90s sequence
+      </span>
+    </div>
   </div>
 
   <!-- ============================================================
@@ -1593,13 +1601,21 @@ body {
       active: false,
       assetId: null,
       faultType: null,
-      severity: 0
+      severity: 0,
+      seq: 0
     },
     rampTimer: null,
     rampSteps: [],
     rampStepIndex: 0,
     simulateAvailable: null,
-    featureImportance: null
+    featureImportance: null,
+    demo: {
+      active: false,
+      queue: [],
+      idx: 0,
+      timers: [],
+      seq: 0
+    }
   };
 
   // ==============================================================
@@ -1723,7 +1739,10 @@ body {
   }
 
   function runAssessments() {
-    var promises = ASSET_IDS.map(assessAsset);
+    var toAssess = ASSET_IDS.filter(function (id) {
+      return !(state.sim.active && state.sim.assetId === id);
+    });
+    var promises = toAssess.map(assessAsset);
     Promise.all(promises).then(function (results) {
       var anySuccess = false;
       var worst = "LOW";
@@ -1746,6 +1765,23 @@ body {
 
         updateAssetCard(r.id, res);
       });
+
+      // Merge in the active simulation asset (its stored result already
+      // contains authoritative engine output; the card is rendered by
+      // updateAssetCardFromSim and must not be overwritten by baseline data).
+      if (state.sim.active && state.sim.assetId) {
+        var simRes = state.assessments[state.sim.assetId];
+        if (simRes) {
+          var src = simRes.risk_classification || "LOW";
+          worst = worstRisk(worst, src);
+          if (simRes.alert_state === "FAILURE_ALERT" ||
+              simRes.alert_state === "INVESTIGATION" ||
+              simRes.investigation_required) {
+            alerts++;
+          }
+          anySuccess = true;
+        }
+      }
 
       if (anySuccess) {
         state.firstAssessDone = true;
@@ -1779,15 +1815,43 @@ body {
     });
   }
 
+  function bumpSimSeq() {
+    state.sim.seq = (state.sim.seq + 1) & 0x7fffffff;
+  }
+
+  function bumpDemoSeq() {
+    state.demo.seq = (state.demo.seq + 1) & 0x7fffffff;
+  }
+
+  function invalidateSim() {
+    bumpSimSeq();
+    if (state.rampTimer) stopRamp();
+    state.sim.active = false;
+    state.sim.assetId = null;
+    state.sim.faultType = null;
+    state.sim.severity = 0;
+  }
+
+  function invalidateDemo() {
+    bumpDemoSeq();
+    state.demo.active = false;
+    state.demo.queue = [];
+    state.demo.idx = 0;
+    state.demo.timers.forEach(function (t) { clearTimeout(t); });
+    state.demo.timers = [];
+  }
+
   function doInject() {
+    stopDemo();
+    invalidateSim();
     var assetId   = document.getElementById("sim-asset").value;
     var faultType = document.getElementById("sim-fault").value;
     var severityVal = parseInt(document.getElementById("sim-severity").value, 10);
     var severity  = clamp(severityVal / 100, 0, 1);
 
-    if (state.rampTimer) stopRamp();
-
+    var seq = state.sim.seq;
     simulateAsset(assetId, faultType, severity).then(function (r) {
+      if (seq !== state.sim.seq) return;
       if (!r.ok) {
         showSimError("Simulation failed: " + (r.error ? r.error.message : "unknown"));
         return;
@@ -1798,11 +1862,15 @@ body {
   }
 
   function doResetAsset() {
-    if (state.rampTimer) stopRamp();
-    var assetId = document.getElementById("sim-asset").value;
+    var assetId = (state.sim.active && state.sim.assetId) ?
+                  state.sim.assetId : document.getElementById("sim-asset").value;
+    invalidateSim();
+    stopDemo();
     clearSimAsset(assetId);
     document.getElementById("sim-active").classList.remove("visible");
+    var seq = state.sim.seq;
     assessAsset(assetId).then(function (r) {
+      if (seq !== state.sim.seq) return;
       if (!r.ok) return;
       var res = r.data.result || {};
       state.assessments[assetId] = res;
@@ -1816,21 +1884,24 @@ body {
   }
 
   function doResetGrid() {
-    if (state.rampTimer) stopRamp();
+    invalidateSim();
+    stopDemo();
     ASSET_IDS.forEach(function (id) { clearSimAsset(id); });
     document.getElementById("sim-active").classList.remove("visible");
     runAssessments();
   }
 
   function doStopSim() {
-    if (state.rampTimer) stopRamp();
+    invalidateSim();
+    stopDemo();
     ASSET_IDS.forEach(function (id) { clearSimAsset(id); });
     document.getElementById("sim-active").classList.remove("visible");
     runAssessments();
   }
 
   function doRamp() {
-    if (state.rampTimer) stopRamp();
+    stopDemo();
+    invalidateSim();
 
     var assetId   = document.getElementById("sim-asset").value;
     var faultType = document.getElementById("sim-fault").value;
@@ -1849,6 +1920,7 @@ body {
       return;
     }
 
+    var seq = state.sim.seq;
     var sevPct = state.rampSteps[state.rampStepIndex];
     var severity = clamp(sevPct / 100, 0, 1);
     var assetId   = state.sim.assetId;
@@ -1863,6 +1935,7 @@ body {
     }
 
     simulateAsset(assetId, faultType, severity).then(function (r) {
+      if (seq !== state.sim.seq) return;
       if (!r.ok) {
         showSimError("Ramp failed at severity " + sevPct + "%: " +
           (r.error ? r.error.message : "unknown"));
@@ -1883,6 +1956,168 @@ body {
     }
     state.rampSteps = [];
     state.rampStepIndex = 0;
+  }
+
+  // ==============================================================
+  // H5 GUIDED DEMO MODE
+  // ==============================================================
+
+  function demoStep(delay, fn) {
+    var t = setTimeout(function () {
+      state.demo.timers = state.demo.timers.filter(function (x) { return x !== t; });
+      if (!state.demo.active) return;
+      fn();
+      state.demo.idx++;
+      nextDemo();
+    }, delay);
+    state.demo.timers.push(t);
+    return t;
+  }
+
+  function nextDemo() {
+    if (!state.demo.active) return;
+    var q = state.demo.queue;
+    if (state.demo.idx >= q.length) {
+      finishDemo();
+      return;
+    }
+    var step = q[state.demo.idx];
+    demoStep(step.delay, step.fn);
+  }
+
+  function startDemo() {
+    if (state.demo.active) stopDemo();
+    invalidateSim();
+    bumpDemoSeq();
+    state.demo.active = true;
+    state.demo.idx = 0;
+    var demoBtn = document.getElementById("demo-btn");
+    if (demoBtn) demoBtn.disabled = true;
+
+    document.getElementById("sim-asset").value = "T01";
+    document.getElementById("sim-fault").value = "overload";
+    document.getElementById("sim-severity").value = 50;
+    document.getElementById("sim-severity-val").textContent = "50%";
+
+    selectAsset("T01");
+
+    state.demo.queue = [
+      {
+        delay: 1500,
+        fn: function () {
+          var dseq = state.demo.seq;
+          setDemoStatus("Monitoring T01 baseline from live /v1/assess\u2026");
+          assessAsset("T01").then(function (r) {
+            if (dseq !== state.demo.seq) return;
+            if (!r.ok) { setDemoStatus("Demo assessment failed: " + r.error.message); return; }
+            var res = r.data.result || {};
+            state.assessments["T01"] = res;
+            updateAssetCard("T01", res);
+            updateGridOverview();
+            updateRiskPanel();
+            updateTelemetryOverview();
+            updateAIDecisionPanel();
+            renderExplainability();
+            setDemoStatus("T01 baseline: " + (res.risk_classification || "LOW") +
+              " \u00B7 prob " + (res.failure_probability != null ? Number(res.failure_probability).toFixed(3) : "--"));
+          });
+        }
+      },
+      {
+        delay: 4000,
+        fn: function () {
+          var dseq = state.demo.seq;
+          setDemoStatus("Assessing T01 with live /v1/assess request\u2026");
+          assessAsset("T01").then(function (r) {
+            if (dseq !== state.demo.seq) return;
+            if (!r.ok) return;
+            var res = r.data.result || {};
+            state.assessments["T01"] = res;
+            updateAssetCard("T01", res);
+            updateGridOverview();
+            updateRiskPanel();
+            updateTelemetryOverview();
+            updateAIDecisionPanel();
+            renderExplainability();
+            setDemoStatus("Assessment complete \u2014 T01 " + (res.risk_classification || "LOW"));
+          });
+        }
+      },
+      {
+        delay: 4000,
+        fn: function () {
+          var prev = state.assessments["T01"];
+          var prevCls = prev && prev.risk_classification ? prev.risk_classification : "LOW";
+          setDemoStatus("Injecting Overload fault at 50% severity via /v1/simulate\u2026");
+          var seq = state.sim.seq;
+          simulateAsset("T01", "overload", 0.5).then(function (r) {
+            if (seq !== state.sim.seq) return;
+            if (!r.ok) {
+              setDemoStatus("Demo injection failed: " + (r.error ? r.error.message : "unknown"));
+              return;
+            }
+            state.demo._prevCls = prevCls;
+            setSimActive("T01", "overload", 0.5);
+            applySimResult("T01", r.data);
+          });
+        }
+      },
+      {
+        delay: 5000,
+        fn: function () {
+          var cur = state.assessments["T01"];
+          var curCls = cur && cur.risk_classification ? cur.risk_classification : "LOW";
+          var prevCls = state.demo._prevCls || "LOW";
+          setDemoStatus("T01 risk escalated: " + prevCls + " \u2192 " + curCls +
+            " \u00B7 prob " + (cur && cur.failure_probability != null ? Number(cur.failure_probability).toFixed(3) : "--"));
+        }
+      },
+      {
+        delay: 6000,
+        fn: function () {
+          setDemoStatus("Engaging exploitability \u2014 T01 decision explanation\u2026");
+          selectAsset("T01");
+          var explPanel = document.getElementById("x-a-title");
+          if (explPanel) explPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      },
+      {
+        delay: 5000,
+        fn: function () {
+          setDemoStatus("Demonstrating recovery \u2014 Reset Asset to baseline\u2026");
+          doResetAsset();
+        }
+      },
+      {
+        delay: 5000,
+        fn: function () {
+          setDemoStatus("Simulation cleared. Auto-refresh restored. Demo complete.");
+        }
+      }
+    ];
+    nextDemo();
+  }
+
+  function finishDemo() {
+    state.demo.active = false;
+    setDemoStatus("Demo complete — dashboard restored to live monitoring.");
+    var demoBtn = document.getElementById("demo-btn");
+    if (demoBtn) demoBtn.disabled = false;
+    runAssessments();
+  }
+
+  function stopDemo() {
+    var hadActive = state.demo.active;
+    invalidateDemo();
+    var demoBtn = document.getElementById("demo-btn");
+    if (demoBtn) demoBtn.disabled = false;
+    if (!hadActive) return;
+    setDemoStatus("");
+  }
+
+  function setDemoStatus(msg) {
+    var el = document.getElementById("demo-status");
+    if (el) el.textContent = msg || "Idle \u2014 click Start Guided Demo to launch the 60\u201390s sequence";
   }
 
   // ==============================================================
@@ -1929,18 +2164,21 @@ body {
   }
 
   function clearSimAsset(assetId) {
-    ASSET_IDS.forEach(function (id) {
-      if (id !== assetId && !state.sim.active) return;
-      var card = document.getElementById("card-" + id.toLowerCase());
-      if (card) card.classList.remove("sim-active-card");
-      var badge = document.getElementById("badge-" + id.toLowerCase());
-      if (badge) {
-        var tag = badge.querySelector(".asset-sim-tag");
-        if (tag) tag.remove();
-      }
-    });
+    var card = document.getElementById("card-" + assetId.toLowerCase());
+    if (card) card.classList.remove("sim-active-card");
 
-    if (assetId === state.sim.assetId) {
+    var badge = document.getElementById("badge-" + assetId.toLowerCase());
+    if (badge) {
+      var tag = badge.querySelector(".asset-sim-tag");
+      if (tag) tag.remove();
+    }
+
+    var stored = state.assessments[assetId];
+    if (stored && stored.simulated_telemetry) {
+      delete stored.simulated_telemetry;
+    }
+
+    if (state.sim.active && state.sim.assetId === assetId) {
       state.sim.active = false;
       state.sim.assetId = null;
       state.sim.faultType = null;
@@ -1953,7 +2191,9 @@ body {
     var sim = env.simulation || {};
     var simTelem = sim.simulated_telemetry || {};
 
-    state.assessments[assetId] = res;
+    var stored = Object.assign({}, res);
+    stored.simulated_telemetry = simTelem;
+    state.assessments[assetId] = stored;
 
     updateAssetCardFromSim(assetId, res, simTelem);
     updateGridOverview();
@@ -2140,12 +2380,16 @@ body {
     if (levelText) levelText.textContent = worstLevel;
     if (probText) probText.textContent =
       res.failure_probability != null ? res.failure_probability.toFixed(3) : "--";
-    var prob = res.failure_probability || 0;
-    var score = res.risk_score || 0;
-    var derivedMl = prob * 60;
-    var derivedOp = score - derivedMl;
-    if (mlText) mlText.textContent = derivedMl.toFixed(2);
-    if (opText) opText.textContent = derivedOp.toFixed(2);
+    var ml = res.ml_score;
+    var op = res.operational_score;
+    if (typeof ml !== "number" || typeof op !== "number") {
+      var prob = res.failure_probability || 0;
+      var score = res.risk_score || 0;
+      ml = prob * 60;
+      op = score - ml;
+    }
+    if (mlText) mlText.textContent = (ml || 0).toFixed(2);
+    if (opText) opText.textContent = (op || 0).toFixed(2);
     if (alertText) {
       var alertState = res.alert_state || "NORMAL";
       alertText.textContent = alertState;
@@ -2158,6 +2402,10 @@ body {
   }
 
   function updateTelemetryOverview() {
+    if (state.sim.active) {
+      updateTelemetryOverviewFromSim();
+      return;
+    }
     var sumTemp = 0, sumLoad = 0, sumVolt = 0, sumThd = 0;
     var count = 0;
 
@@ -2183,17 +2431,11 @@ body {
       var sim = state.sim.active && state.sim.assetId === id;
       if (sim) {
         var r = state.assessments[id];
-        if (r && r.simulated_telemetry) {
-          sumTemp += r.simulated_telemetry.temperature_c || t.temperature_c;
-          sumLoad += r.simulated_telemetry.load_percent || t.load_percent;
-          sumVolt += r.simulated_telemetry.voltage_pu || t.voltage_pu;
-          sumThd  += r.simulated_telemetry.thd_percent || t.thd_percent;
-        } else {
-          sumTemp += t.temperature_c;
-          sumLoad += t.load_percent;
-          sumVolt += t.voltage_pu;
-          sumThd  += t.thd_percent;
-        }
+        var st = r && r.simulated_telemetry;
+        sumTemp += st && st.temperature_c != null ? st.temperature_c : t.temperature_c;
+        sumLoad += st && st.load_percent != null ? st.load_percent : t.load_percent;
+        sumVolt += st && st.voltage_pu != null ? st.voltage_pu : t.voltage_pu;
+        sumThd  += st && st.thd_percent != null ? st.thd_percent : t.thd_percent;
       } else {
         sumTemp += t.temperature_c;
         sumLoad += t.load_percent;
@@ -2600,6 +2842,9 @@ body {
 
     var stopBtn = document.getElementById("sim-stop-btn");
     if (stopBtn) stopBtn.addEventListener("click", doStopSim);
+
+    var demoBtn = document.getElementById("demo-btn");
+    if (demoBtn) demoBtn.addEventListener("click", startDemo);
   }
 
   // ==============================================================
