@@ -667,13 +667,25 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             asset_map = {
                 "T01": {"rated_mva": 40.0, "asset_age_years": 6, "criticality": 0.9,
                         "base_current_a": 442.72, "base_active_power_mw": 22.968,
-                        "base_reactive_power_mvar": 7.242},
+                        "base_reactive_power_mvar": 7.242,
+                        "voltage_pu": 0.9999, "frequency_hz": 49.965,
+                        "power_factor": 0.9291, "temperature_c": 62.6,
+                        "load_percent": 66.9, "thd_percent": 2.67,
+                        "previous_faults": 0},
                 "T02": {"rated_mva": 63.0, "asset_age_years": 11, "criticality": 1.0,
                         "base_current_a": 783.4, "base_active_power_mw": 42.084,
-                        "base_reactive_power_mvar": 12.696},
+                        "base_reactive_power_mvar": 12.696,
+                        "voltage_pu": 0.9298, "frequency_hz": 49.894,
+                        "power_factor": 0.9574, "temperature_c": 72.0,
+                        "load_percent": 72.61, "thd_percent": 4.571,
+                        "previous_faults": 1},
                 "T03": {"rated_mva": 40.0, "asset_age_years": 17, "criticality": 1.0,
                         "base_current_a": 505.8, "base_active_power_mw": 26.5,
-                        "base_reactive_power_mvar": 11.2},
+                        "base_reactive_power_mvar": 11.2,
+                        "voltage_pu": 1.032, "frequency_hz": 49.98,
+                        "power_factor": 0.88, "temperature_c": 81.5,
+                        "load_percent": 82.0, "thd_percent": 5.2,
+                        "previous_faults": 3},
             }
             asset = asset_map[asset_id]
 
@@ -686,12 +698,14 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
             )
 
             state = OperatingState(
-                voltage_pu=1.0, current_a=asset["base_current_a"],
-                frequency_hz=50.0,
+                voltage_pu=asset["voltage_pu"], current_a=asset["base_current_a"],
+                frequency_hz=asset["frequency_hz"],
                 active_power_mw=asset["base_active_power_mw"],
                 reactive_power_mvar=asset["base_reactive_power_mvar"],
-                power_factor=0.95, temperature_c=62.0,
-                load_percent=70.0, thd_percent=2.5,
+                power_factor=asset["power_factor"],
+                temperature_c=asset["temperature_c"],
+                load_percent=asset["load_percent"],
+                thd_percent=asset["thd_percent"],
             )
 
             fault_fn = {
@@ -715,14 +729,9 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
 
             voltage_deviation = abs(state.voltage_pu - 1.0)
             frequency_deviation = abs(state.frequency_hz - 50.0)
-            temperature_excess = max(0.0, state.temperature_c - asset["base_current_a"] * 0.0)
             temperature_excess = max(0.0, state.temperature_c - 55.0)
             electrical_stress = voltage_deviation * (state.current_a / asset["base_current_a"]) * (state.temperature_c / 100.0)
 
-            fault_type_map = {
-                "overload": "normal", "overheating": "normal",
-                "voltage_instability": "normal", "harmonic_distortion": "normal",
-            }
             telemetry = {
                 "rated_mva": asset["rated_mva"],
                 "asset_age_years": asset["asset_age_years"],
@@ -740,8 +749,8 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
                 "frequency_deviation": round(frequency_deviation, 4),
                 "temperature_excess": round(temperature_excess, 2),
                 "electrical_stress": round(electrical_stress, 4),
-                "fault_type": fault_type_map.get(fault_type, "normal"),
-                "previous_faults": 0,
+                "fault_type": fault_type,
+                "previous_faults": asset["previous_faults"],
             }
 
             engine = _get_engine()
