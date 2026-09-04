@@ -50,6 +50,11 @@ _DEFAULT_SOCKET_TIMEOUT = 10.0
 _DEFAULT_MAX_CONCURRENT = 32
 _MAX_REQUEST_LINE = 4096
 
+# The single allowed browser origin for CORS. The dashboard is served and
+# opened only from this local origin; no wildcard is used. Requests with no
+# Origin header (non-browser callers such as curl) are unaffected.
+_ALLOWED_ORIGIN = "http://127.0.0.1:8080"
+
 # Read-only reference to the model feature-importance artifact. This file is
 # served to the dashboard for H4 model explainability. It is opened for read
 # only and is never modified by the API.
@@ -188,10 +193,20 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
 
     # -- plumbing ----------------------------------------------------------
 
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin")
+        return origin == _ALLOWED_ORIGIN
+
+    def _send_cors_headers(self) -> None:
+        if self._origin_allowed():
+            self.send_header("Access-Control-Allow-Origin", _ALLOWED_ORIGIN)
+            self.send_header("Vary", "Origin")
+
     def _write_json(self, status: int, payload: Dict[str, Any],
                     headers: Dict[str, str] | None = None) -> None:
         body = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
         self.send_response(status)
+        self._send_cors_headers()
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -265,7 +280,39 @@ class GridSentinelHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self._correlation_id = correlation_id(self.headers)
         self._bytes_read = 0
-        self._fail(err.method_not_allowed())
+
+        # CORS preflight only. Browsers never send the API key on OPTIONS, so
+        # preflight must not require authentication. It only confirms that the
+        # allowed local origin may call the listed methods/headers; the actual
+        # GET/POST endpoints still require the API key.
+        if not self._origin_allowed():
+            self._fail(err.ApiError(403, "forbidden", "Origin not allowed."))
+            return
+
+        requested_method = (self.headers.get("Access-Control-Request-Method") or "").upper()
+        if requested_method not in ("GET", "POST", "OPTIONS"):
+            self._fail(err.method_not_allowed())
+            return
+
+        requested_headers = (
+            self.headers.get("Access-Control-Request-Headers") or ""
+        ).lower()
+        allowed_headers = {"content-type", "x-api-key"}
+        if requested_headers:
+            for header in (h.strip() for h in requested_headers.split(",")):
+                if header and header not in allowed_headers:
+                    self._fail(err.method_not_allowed())
+                    return
+
+        self._write_json(
+            200,
+            {"request_id": self._correlation_id, "status": "ok"},
+            headers={
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
 
     def do_POST(self) -> None:
         self._correlation_id = correlation_id(self.headers)
